@@ -1,0 +1,99 @@
+const en = {
+	"common.cancel": "Cancel",
+	"common.create": "Create",
+	"common.remove": "Remove",
+	"common.reset": "Reset",
+	"common.close": "Close",
+
+	"view.displayName": "Person network",
+	"view.ribbonTooltip": "Open person network",
+	"view.openCommand": "Open person network",
+	"view.exportAction": "Export as PNG",
+	"view.filterAction": "Filters",
+	"view.defaultCenterLabel": "You",
+	"view.emptyTitle": "No people found",
+	"view.emptyBody": "Looking for notes tagged \"#{{value}}\".",
+	"view.emptyHint": "Make sure your notes have matching frontmatter, for example:",
+	"view.notice.exportFailed": "Export failed — nothing to export yet.",
+	"view.notice.exportSuccess": "Graph exported as PNG.",
+
+	"bases.viewName": "Person network",
+
+	"tooltip.company": "Company: {{value}}",
+	"tooltip.relation": "Relation: {{value}}",
+	"tooltip.position": "Position score: {{value}}/10",
+	"tooltip.ghostHint": "No note yet — click to create one",
+
+	"panel.searchPlaceholder": "Search people…",
+	"panel.replayAnimation": "Replay appear animation",
+	"panel.resetTooltip": "Restore default settings",
+	"panel.filtersHeading": "Filters",
+	"panel.relationHeading": "Relation type",
+	"panel.companyHeading": "Company",
+	"panel.displayHeading": "Display",
+	"panel.showEdges": "Show relationship lines",
+	"panel.showGhosts": "Show potential contacts",
+	"panel.forcesHeading": "Forces",
+	"panel.linkDistance": "Link distance",
+	"panel.repulsion": "Repel force",
+	"panel.linkStrength": "Link force",
+	"panel.centerStrength": "Center force",
+	"panel.nodeSize": "Node size",
+	"panel.edgeThickness": "Line thickness",
+
+	"ghost.confirmTitle": "Create a note for {{name}}?",
+	"ghost.confirmBody":
+		"{{name}} was listed as a potential contact but doesn't have a note yet. Create one now?",
+	"ghost.noticeCreated": "Created a note for {{name}}.",
+	"ghost.noticeFailed": "Couldn't create a note for {{name}}.",
+
+	"settings.personDetectionHeading": "Person detection",
+	"settings.personDetectionDesc": "Controls which notes in your vault are treated as people.",
+	"settings.personTag.name": "Recognition tag",
+	"settings.personTag.desc": "A note is included in the graph when it has this tag. Existing tags are suggested as you type.",
+	"settings.nameField.name": "Name field",
+	"settings.nameField.desc": "Frontmatter field for the display name (falls back to the filename).",
+	"settings.photoField.name": "Photo field",
+	"settings.photoField.desc": "Frontmatter field with the vault-relative photo path.",
+	"settings.relationField.name": "Relation type field",
+	"settings.relationField.desc": "Frontmatter field naming this person's role — see Roles below.",
+	"settings.potentialContactsField.name": "Contacts field",
+	"settings.potentialContactsField.desc":
+		"Frontmatter list field of people's names. A name with its own person note becomes a connection line; a name without one appears as a ghost node.",
+	"settings.excludePaths.name": "Exclude paths",
+	"settings.excludePaths.desc": "Comma-separated folders or files to skip.",
+
+	"settings.rolesHeading": "Roles",
+	"settings.rolesDesc":
+		"Each role sets a ring color and stroke style, plus how close that person orbits the center (1-10).",
+	"settings.newRolePlaceholder": "Role name (e.g. friend)",
+	"settings.addRole": "Add role",
+	"settings.defaultRoleName": "Default (unset / unmatched)",
+	"settings.resetRolesTooltip": "Reset all roles to defaults",
+	"settings.resetRolesConfirmTitle": "Reset roles to defaults?",
+	"settings.resetRolesConfirmBody":
+		"This replaces all your custom roles and the default role's color/style with the plugin's built-in defaults. This can't be undone.",
+	"settings.ringStyle.solid": "Solid",
+	"settings.ringStyle.dashed": "Dashed",
+	"settings.ringStyle.dotted": "Dotted",
+
+	"settings.generalHeading": "General",
+	"settings.generalDesc": "Overall appearance of the graph.",
+	"settings.centerLabel.name": "Center node label",
+	"settings.centerLabel.desc": "Used for the center node when no note is marked is_self.",
+	"settings.enableBases.name": "Bases integration",
+	"settings.enableBases.desc":
+		"Offer the graph as a view type inside Bases (requires the Bases core plugin).",
+	"settings.enableBases.reloadNotice": "Reload the plugin (or Obsidian) to apply.",
+
+	"settings.newNoteHeading": "New notes from potential contacts",
+	"settings.newNoteDesc": "Used when you click a potential contact that doesn't have a note yet.",
+	"settings.newNoteFolder.name": "Folder for new notes",
+	"settings.newNoteFolder.desc": "Left empty creates the note in the vault root.",
+	"settings.newNoteTemplatePath.name": "Template note",
+	"settings.newNoteTemplatePath.desc":
+		"Pick an existing note whose content is used as the frontmatter template; leave empty for a built-in default. Use {{name}} inside it as a placeholder for the person's name.",
+	"settings.newNoteTemplatePath.placeholder": "Search a note…",
+} as const;
+
+export default en;
