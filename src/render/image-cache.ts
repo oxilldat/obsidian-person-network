@@ -67,10 +67,9 @@ export class ImageCache {
 		if (!(file instanceof TFile)) return undefined;
 
 		try {
-			const resourceUrl = this.app.vault.getResourcePath(file);
-			const response = await fetch(resourceUrl);
-			const blob = await response.blob();
-			return await this.decodeBlob(blob);
+			// Read through the vault API rather than fetching the resource URL.
+			const buffer = await this.app.vault.readBinary(file);
+			return await this.decodeBlob(new Blob([buffer]));
 		} catch {
 			return undefined;
 		}

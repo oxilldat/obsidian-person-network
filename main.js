@@ -553,10 +553,8 @@ var ImageCache = class {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!(file instanceof import_obsidian.TFile)) return void 0;
     try {
-      const resourceUrl = this.app.vault.getResourcePath(file);
-      const response = await fetch(resourceUrl);
-      const blob = await response.blob();
-      return await this.decodeBlob(blob);
+      const buffer = await this.app.vault.readBinary(file);
+      return await this.decodeBlob(new Blob([buffer]));
     } catch (e) {
       return void 0;
     }
@@ -723,6 +721,7 @@ var CanvasRenderer = class {
     };
     this.container = container;
     this.getSettings = getSettings;
+    this.win = container.win;
     this.canvas = container.createEl("canvas", { cls: "person-network-canvas" });
     const ctx = this.canvas.getContext("2d");
     if (!ctx) throw new Error("2D canvas context is unavailable");
@@ -1002,12 +1001,12 @@ var CanvasRenderer = class {
   }
   requestRedraw() {
     if (this.destroyed || this.rafHandle !== null) return;
-    this.rafHandle = requestAnimationFrame(this.loop);
+    this.rafHandle = this.win.requestAnimationFrame(this.loop);
   }
   destroy() {
     this.destroyed = true;
     this.resizeObserver.disconnect();
-    if (this.rafHandle !== null) cancelAnimationFrame(this.rafHandle);
+    if (this.rafHandle !== null) this.win.cancelAnimationFrame(this.rafHandle);
     this.imageCache.clear();
     this.canvas.remove();
   }
@@ -1258,12 +1257,14 @@ var Tooltip = class {
   show(lines, screenX, screenY) {
     this.el.empty();
     for (const line of lines) this.el.createDiv({ text: line });
-    this.el.style.left = `${screenX + 14}px`;
-    this.el.style.top = `${screenY - 10}px`;
-    this.el.style.display = "block";
+    this.el.setCssStyles({
+      left: `${screenX + 14}px`,
+      top: `${screenY - 10}px`,
+      display: "block"
+    });
   }
   hide() {
-    this.el.style.display = "none";
+    this.el.setCssStyles({ display: "none" });
   }
   destroy() {
     this.el.remove();
@@ -2101,7 +2102,23 @@ var import_obsidian12 = require("obsidian");
 function arraysEqual(a, b) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
-var RIGHT_TRIANGLE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon right-triangle"><path d="M3 8L12 17L21 8"></path></svg>';
+function appendCollapseTriangle(parent) {
+  const svg = parent.createSvg("svg", {
+    attr: {
+      xmlns: "http://www.w3.org/2000/svg",
+      width: "24",
+      height: "24",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    cls: "svg-icon right-triangle"
+  });
+  svg.createSvg("path", { attr: { d: "M3 8L12 17L21 8" } });
+}
 var FilterPanel = class {
   constructor(container, options) {
     /** Collapse state per section, so panel rebuilds don't reset what the user expanded. */
@@ -2177,7 +2194,7 @@ var FilterPanel = class {
     const section = parent.createDiv({ cls: "tree-item graph-control-section" });
     const self = section.createDiv({ cls: "tree-item-self mod-collapsible" });
     const iconEl = self.createDiv({ cls: "tree-item-icon collapse-icon" });
-    iconEl.innerHTML = RIGHT_TRIANGLE_SVG;
+    appendCollapseTriangle(iconEl);
     const inner = self.createDiv({ cls: "tree-item-inner" });
     inner.createEl("header", { cls: "graph-control-section-header", text: t(headingKey) });
     const content = section.createDiv({ cls: "tree-item-children" });
@@ -2197,7 +2214,7 @@ var FilterPanel = class {
   /** A slider row whose track sits on its own line under the label (native `.mod-slider` layout). */
   sliderRow(content, labelKey, range, value, onChange) {
     const setting = new import_obsidian12.Setting(content).setName(t(labelKey)).addSlider(
-      (slider) => slider.setLimits(range.min, range.max, range.step).setValue(value).setDynamicTooltip().onChange(onChange)
+      (slider) => slider.setLimits(range.min, range.max, range.step).setValue(value).onChange(onChange)
     );
     setting.settingEl.addClass("mod-slider");
   }
@@ -2469,10 +2486,10 @@ var PersonNetworkPlugin = class extends import_obsidian14.Plugin {
     const data = await this.loadData();
     const defaults = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     if (data) {
+      const target = defaults;
+      const source = data;
       for (const key of Object.keys(defaults)) {
-        if (data[key] !== void 0) {
-          defaults[key] = data[key];
-        }
+        if (source[key] !== void 0) target[key] = source[key];
       }
     }
     this.settings = defaults;

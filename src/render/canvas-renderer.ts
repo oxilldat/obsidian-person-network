@@ -130,6 +130,8 @@ export class CanvasRenderer {
 
 	private readonly container: HTMLElement;
 	private readonly getSettings: () => PluginSettings;
+	/** The window owning this canvas, so animation frames work in popout windows too. */
+	private readonly win: Window;
 
 	private readonly canvas: HTMLCanvasElement;
 	private readonly ctx: CanvasRenderingContext2D;
@@ -161,6 +163,7 @@ export class CanvasRenderer {
 	constructor(container: HTMLElement, app: App, getSettings: () => PluginSettings) {
 		this.container = container;
 		this.getSettings = getSettings;
+		this.win = container.win;
 
 		this.canvas = container.createEl("canvas", { cls: "person-network-canvas" });
 		const ctx = this.canvas.getContext("2d");
@@ -490,13 +493,13 @@ export class CanvasRenderer {
 
 	requestRedraw(): void {
 		if (this.destroyed || this.rafHandle !== null) return;
-		this.rafHandle = requestAnimationFrame(this.loop);
+		this.rafHandle = this.win.requestAnimationFrame(this.loop);
 	}
 
 	destroy(): void {
 		this.destroyed = true;
 		this.resizeObserver.disconnect();
-		if (this.rafHandle !== null) cancelAnimationFrame(this.rafHandle);
+		if (this.rafHandle !== null) this.win.cancelAnimationFrame(this.rafHandle);
 		this.imageCache.clear();
 		this.canvas.remove();
 	}

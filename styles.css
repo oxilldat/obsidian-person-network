@@ -5,8 +5,13 @@
 	position: relative;
 	width: 100%;
 	height: 100%;
-	overflow: hidden !important;
 	background: var(--background-primary);
+}
+
+/* Doubled class raises specificity to override the host's overflow without
+   !important, so the canvas never grows a scrollbar. */
+.person-network-container.person-network-container {
+	overflow: hidden;
 }
 
 .person-network-container::-webkit-scrollbar {

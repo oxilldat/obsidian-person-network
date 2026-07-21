@@ -61,10 +61,10 @@ export default class PersonNetworkPlugin extends Plugin {
 		if (data) {
 			// Copy only known keys so stale fields from older plugin versions
 			// don't linger in memory (and get dropped on the next save).
-			for (const key of Object.keys(defaults) as Array<keyof PluginSettings>) {
-				if (data[key] !== undefined) {
-					(defaults[key] as PluginSettings[keyof PluginSettings]) = data[key] as PluginSettings[keyof PluginSettings];
-				}
+			const target = defaults as unknown as Record<string, unknown>;
+			const source = data as unknown as Record<string, unknown>;
+			for (const key of Object.keys(defaults)) {
+				if (source[key] !== undefined) target[key] = source[key];
 			}
 		}
 		this.settings = defaults;

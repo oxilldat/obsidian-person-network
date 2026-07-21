@@ -20,9 +20,28 @@ function arraysEqual(a: string[], b: string[]): boolean {
 	return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-/** Same collapse-triangle glyph Obsidian's own tree items (file explorer, outline, core Graph view) use. */
-const RIGHT_TRIANGLE_SVG =
-	'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon right-triangle"><path d="M3 8L12 17L21 8"></path></svg>';
+/**
+ * Builds the same collapse-triangle glyph Obsidian's own tree items (file
+ * explorer, outline, core Graph view) use, via the DOM API rather than
+ * innerHTML.
+ */
+function appendCollapseTriangle(parent: HTMLElement): void {
+	const svg = parent.createSvg("svg", {
+		attr: {
+			xmlns: "http://www.w3.org/2000/svg",
+			width: "24",
+			height: "24",
+			viewBox: "0 0 24 24",
+			fill: "none",
+			stroke: "currentColor",
+			"stroke-width": "2",
+			"stroke-linecap": "round",
+			"stroke-linejoin": "round",
+		},
+		cls: "svg-icon right-triangle",
+	});
+	svg.createSvg("path", { attr: { d: "M3 8L12 17L21 8" } });
+}
 
 /**
  * One persistent element that toggles between a compact icon strip and a
@@ -142,7 +161,7 @@ export class FilterPanel {
 		const section = parent.createDiv({ cls: "tree-item graph-control-section" });
 		const self = section.createDiv({ cls: "tree-item-self mod-collapsible" });
 		const iconEl = self.createDiv({ cls: "tree-item-icon collapse-icon" });
-		iconEl.innerHTML = RIGHT_TRIANGLE_SVG;
+		appendCollapseTriangle(iconEl);
 		const inner = self.createDiv({ cls: "tree-item-inner" });
 		inner.createEl("header", { cls: "graph-control-section-header", text: t(headingKey) });
 		const content = section.createDiv({ cls: "tree-item-children" });
@@ -171,11 +190,7 @@ export class FilterPanel {
 		onChange: (value: number) => void,
 	): void {
 		const setting = new Setting(content).setName(t(labelKey)).addSlider((slider) =>
-			slider
-				.setLimits(range.min, range.max, range.step)
-				.setValue(value)
-				.setDynamicTooltip()
-				.onChange(onChange),
+			slider.setLimits(range.min, range.max, range.step).setValue(value).onChange(onChange),
 		);
 		setting.settingEl.addClass("mod-slider");
 	}

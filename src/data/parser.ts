@@ -69,7 +69,7 @@ export function parsePerson(
 ): PersonNode | null {
 	if (!matchesPersonTag(cache, settings.personTag)) return null;
 
-	const fm = (cache?.frontmatter as Frontmatter | undefined) ?? {};
+	const fm: Frontmatter = cache?.frontmatter ?? {};
 
 	const rawName = fm[settings.nameField];
 	const displayName = rawName !== undefined ? String(rawName) : file.basename;
