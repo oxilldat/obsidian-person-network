@@ -1,0 +1,9 @@
+{
+	"id": "person-network",
+	"name": "Person Network",
+	"version": "1.0.0",
+	"minAppVersion": "1.10.2",
+	"description": "Visualize the people in your vault as an interactive relationship map, with roles, filtering, potential contacts and Bases support.",
+	"author": "oxilldat",
+	"isDesktopOnly": false
+}

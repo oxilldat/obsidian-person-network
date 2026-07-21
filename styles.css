@@ -1,0 +1,289 @@
+/* Person Network plugin styles — all colors come from Obsidian's own CSS
+   custom properties so the view adapts to light/dark and community themes. */
+
+.person-network-container {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	overflow: hidden !important;
+	background: var(--background-primary);
+}
+
+.person-network-container::-webkit-scrollbar {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
+/* As a Bases view (including bases embedded in notes) the container's height
+   comes from content, not a workspace leaf — give the canvas room to exist. */
+.person-network-container.person-network-bases {
+	min-height: 320px;
+	height: 100%;
+}
+
+.person-network-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	touch-action: none;
+	cursor: default;
+}
+
+.person-network-empty {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	padding: 24px;
+	text-align: center;
+	color: var(--text-muted);
+	pointer-events: none;
+}
+
+.person-network-empty pre {
+	pointer-events: auto;
+	text-align: left;
+}
+
+.person-network-tooltip {
+	position: absolute;
+	display: none;
+	max-width: 240px;
+	padding: 6px 10px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m, 6px);
+	box-shadow: var(--shadow-s);
+	font-size: 12px;
+	line-height: 1.4;
+	pointer-events: none;
+	z-index: 20;
+}
+
+/*
+ * One persistent panel that toggles between a compact icon strip and a full
+ * control panel via `.is-close` — the same architecture as Obsidian's own
+ * core Graph view controls (`.graph-controls`), including reusing several of
+ * its class names (graph-controls-button, graph-control-section,
+ * graph-control-section-header, tree-item, tree-item-children, mod-slider,
+ * mod-toggle, mod-search-setting, ...) so their unscoped core rules apply to
+ * us automatically. This block supplies the rules that in core ARE scoped to
+ * `.graph-controls`, translated onto our own root class instead.
+ */
+.person-network-panel-root {
+	position: absolute;
+	top: var(--size-4-3, 12px);
+	right: var(--size-4-3, 12px);
+	z-index: 30;
+	padding: 0;
+	background-color: var(--menu-background, var(--background-primary));
+	width: 240px;
+	overflow: auto;
+	border-radius: var(--menu-radius, var(--radius-m, 6px));
+}
+
+.person-network-panel-root:not(.is-close) {
+	max-height: calc(100% - var(--size-4-4, 16px));
+	border: var(--menu-border-width, 1px) solid var(--menu-border-color, var(--background-modifier-border));
+	box-shadow: var(--shadow-s);
+}
+
+.person-network-panel-root.is-close {
+	width: auto;
+	background-color: var(--background-primary);
+	border: var(--menu-border-width, 1px) solid transparent;
+	padding: var(--size-2-3, 8px);
+	box-shadow: var(--shadow-s);
+}
+
+.person-network-panel-root.is-close .person-network-panel-sections {
+	display: none;
+}
+
+.person-network-panel-root input[type="text"],
+.person-network-panel-root input[type="range"] {
+	width: 100%;
+	font-size: var(--font-ui-small);
+}
+
+.person-network-panel-root .setting-item {
+	background-color: transparent;
+	padding: var(--size-2-3, 8px) 0;
+	margin-bottom: var(--size-4-1, 4px);
+	border: none;
+}
+
+.person-network-panel-root .setting-item.mod-slider {
+	flex-direction: column;
+}
+
+.person-network-panel-root .setting-item.mod-slider > * {
+	width: 100%;
+}
+
+.person-network-panel-root .setting-item.mod-slider .setting-item-info {
+	margin-inline-end: 0;
+}
+
+.person-network-panel-root .setting-item.mod-slider .setting-item-control {
+	padding-top: var(--size-4-3, 12px);
+}
+
+.person-network-panel-root .setting-item.mod-toggle .setting-item-control {
+	padding-top: 0;
+}
+
+.person-network-panel-root .setting-item.mod-search-setting .setting-item-info {
+	display: none;
+}
+
+.person-network-panel-root .setting-item.mod-search-setting .setting-item-control .search-input-container {
+	position: relative;
+	flex-grow: 1;
+	margin: 0;
+}
+
+.person-network-panel-root .setting-item-name {
+	font-size: var(--font-ui-small);
+}
+
+.person-network-panel-root::-webkit-scrollbar,
+.person-network-panel-root::-webkit-scrollbar-thumb {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
+/* Icon buttons: only mod-open + mod-animate show while closed; only
+   mod-close + mod-reset show while open, floating over the panel content. */
+.person-network-panel-root .graph-controls-button {
+	display: none;
+	z-index: 1;
+}
+
+.person-network-panel-root .graph-controls-button.mod-close,
+.person-network-panel-root .graph-controls-button.mod-reset {
+	position: absolute;
+	top: var(--size-2-3, 8px);
+	inset-inline-end: var(--size-4-2, 8px);
+	padding: var(--size-2-2, 4px);
+}
+
+.person-network-panel-root:not(.is-close) .graph-controls-button.mod-close,
+.person-network-panel-root:not(.is-close) .graph-controls-button.mod-reset {
+	display: flex;
+}
+
+.person-network-panel-root .graph-controls-button.mod-reset {
+	inset-inline-end: 36px;
+}
+
+.person-network-panel-root.is-close .graph-controls-button.mod-open {
+	display: flex;
+}
+
+.person-network-panel-root .graph-controls-button.mod-animate {
+	margin-top: var(--size-4-2, 8px);
+}
+
+.person-network-panel-root.is-close .graph-controls-button.mod-animate {
+	display: flex;
+}
+
+.person-network-panel-root .graph-control-section:last-child .tree-item-children {
+	padding-bottom: var(--size-4-4, 16px);
+}
+
+.person-network-panel-root .tree-item-self.mod-collapsible {
+	cursor: pointer;
+}
+
+/* Actually hides a section's rows when collapsed — lost when the panel was
+   rewritten onto the new root class, which is why sections stopped
+   collapsing. */
+.person-network-panel-root .tree-item.is-collapsed > .tree-item-children {
+	display: none;
+}
+
+.person-network-panel-root .tree-item-icon.collapse-icon svg {
+	transition: transform 100ms ease-in-out;
+}
+
+.person-network-panel-root .tree-item-icon.collapse-icon.is-collapsed svg {
+	transform: rotate(-90deg);
+}
+
+.person-network-modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.person-network-settings-group {
+	background: var(--background-secondary);
+	border-radius: var(--radius-l, 12px);
+	margin-bottom: 8px;
+	overflow: hidden;
+}
+
+/* Strip whatever background/radius/margin the theme puts on individual
+   .setting-item rows — the group div above owns the card look instead,
+   so this no longer depends on the active theme's own behavior. */
+.person-network-settings-group .setting-item {
+	background: none;
+	border-radius: 0;
+	margin: 0;
+	padding: 12px 16px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.person-network-settings-group .setting-item:first-child {
+	border-top: none;
+}
+
+.person-network-danger-icon {
+	color: var(--text-error, #e93147);
+}
+
+.person-network-danger-icon:hover {
+	color: var(--text-error, #e93147);
+	opacity: 0.75;
+}
+
+.person-network-stepper {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.person-network-stepper-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	line-height: 1;
+	border-radius: var(--radius-s, 4px);
+	background: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.person-network-stepper-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.person-network-stepper-value {
+	min-width: 1.5em;
+	text-align: center;
+	color: var(--text-normal);
+	font-variant-numeric: tabular-nums;
+}

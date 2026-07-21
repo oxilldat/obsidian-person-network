@@ -1,0 +1,11 @@
+# Build output
+main.js
+
+# npm
+node_modules
+
+# Obsidian
+data.json
+
+# Local release staging (assets are attached to the GitHub Release, not committed)
+release/
