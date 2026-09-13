@@ -2,7 +2,7 @@ import { ListValue, type App, type BasesEntry, type BasesPropertyId } from "obsi
 import { FIXED_FIELDS } from "../data/frontmatter-schema";
 import { buildContactLinks } from "../data/graph-links";
 import { resolvePhotoPath, resolveRole, stripWikilink } from "../data/parser";
-import type { GraphSnapshot } from "../data/store";
+import type { GraphDiagnostics, GraphSnapshot } from "../data/store";
 import type { PersonNode, PluginSettings } from "../data/types";
 
 /** Property mapping for a Bases view, resolved from the view's config with global-settings fallbacks. */
@@ -89,5 +89,15 @@ export function adaptEntries(
 		app.metadataCache.getFirstLinkpathDest(name, "") !== null;
 
 	const { edges, ghosts } = buildContactLinks(people, noteExistsInVault);
-	return { people, ghosts, edges };
+	const counts = new Map<string, number>();
+	for (const person of people) {
+		const key = person.displayName.trim().toLowerCase();
+		counts.set(key, (counts.get(key) ?? 0) + 1);
+	}
+	const diagnostics: GraphDiagnostics = {
+		multipleSelf: people.filter((person) => person.isSelf).map((person) => person.displayName),
+		duplicateNames: [...counts].filter(([, count]) => count > 1).map(([name]) => name),
+		unknownRoles: [...new Set(people.map((person) => person.relationType).filter((role): role is string => !!role && !settings.roles[role]))],
+	};
+	return { people, ghosts, edges, diagnostics };
 }

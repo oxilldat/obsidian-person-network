@@ -15,6 +15,7 @@ export class ImageCache {
 	private readonly bitmaps = new Map<string, ImageBitmap>();
 	private readonly pending = new Map<string, Promise<ImageBitmap | undefined>>();
 	private readonly failed = new Set<string>();
+	private generation = 0;
 
 	constructor(app: App) {
 		this.app = app;
@@ -30,6 +31,7 @@ export class ImageCache {
 	}
 
 	invalidate(path: string): void {
+		this.generation += 1;
 		this.bitmaps.get(path)?.close();
 		this.bitmaps.delete(path);
 		this.pending.delete(path);
@@ -38,6 +40,7 @@ export class ImageCache {
 
 	/** Frees every decoded bitmap — call when the owning view closes. */
 	clear(): void {
+		this.generation += 1;
 		for (const bitmap of this.bitmaps.values()) bitmap.close();
 		this.bitmaps.clear();
 		this.pending.clear();
@@ -52,10 +55,17 @@ export class ImageCache {
 		const pending = this.pending.get(path);
 		if (pending) return pending;
 
+		const generation = this.generation;
 		const promise = this.decode(path).then((bitmap) => {
-			this.pending.delete(path);
-			if (bitmap) this.bitmaps.set(path, bitmap);
-			else this.failed.add(path);
+			if (this.pending.get(path) === promise) this.pending.delete(path);
+			if (generation !== this.generation) {
+				bitmap?.close();
+				return undefined;
+			}
+			if (bitmap) {
+				this.bitmaps.get(path)?.close();
+				this.bitmaps.set(path, bitmap);
+			} else this.failed.add(path);
 			return bitmap;
 		});
 		this.pending.set(path, promise);

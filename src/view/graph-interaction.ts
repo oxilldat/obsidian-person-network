@@ -19,6 +19,8 @@ export function ghostTooltipLines(ghost: GhostNode): string[] {
 export interface GraphInteractionCallbacks {
 	/** Fired for a real (non-center) node when the pointer went down and up without dragging. */
 	onNodeClick(id: string): void;
+	onNodeContextMenu?(id: string, event: MouseEvent): void;
+	onViewChanged?(): void;
 	/** Lines for the hover tooltip, or null to show none for this node. */
 	getTooltipLines(id: string): string[] | null;
 }
@@ -61,6 +63,7 @@ export function wireGraphInteraction(
 	};
 
 	component.registerDomEvent(canvas, "pointerdown", (event: PointerEvent) => {
+		if (event.button !== 0) return;
 		const pos = getPointerPosition(event);
 		const hitId = renderer.pick(pos.x, pos.y);
 
@@ -69,6 +72,7 @@ export function wireGraphInteraction(
 		pointerDownId = hitId ?? null;
 
 		if (hitId) {
+			canvas.setPointerCapture(event.pointerId);
 			draggingId = hitId;
 			renderer.beginDrag(hitId);
 		} else {
@@ -95,7 +99,7 @@ export function wireGraphInteraction(
 		lastPointer = pos;
 	});
 
-	component.registerDomEvent(window, "pointerup", () => {
+	const finishPointer = (event?: PointerEvent): void => {
 		if (draggingId) renderer.endDrag(draggingId);
 
 		const moved = Math.hypot(lastPointer.x - pointerDownPos.x, lastPointer.y - pointerDownPos.y);
@@ -106,7 +110,11 @@ export function wireGraphInteraction(
 		draggingId = null;
 		isPanning = false;
 		pointerDownId = null;
-	});
+		callbacks.onViewChanged?.();
+		if (event && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+	};
+	component.registerDomEvent(canvas.win, "pointerup", finishPointer);
+	component.registerDomEvent(canvas.win, "pointercancel", finishPointer);
 
 	component.registerDomEvent(canvas, "wheel", (event: WheelEvent) => {
 		event.preventDefault();
@@ -115,8 +123,20 @@ export function wireGraphInteraction(
 		renderer.notifyUserInteraction();
 		renderer.camera.zoomAt(pos.x, pos.y, factor);
 		renderer.requestRedraw();
+		callbacks.onViewChanged?.();
 	}, { passive: false });
 
-	component.registerDomEvent(canvas, "dblclick", () => renderer.fitToContent(true));
+	component.registerDomEvent(canvas, "dblclick", () => {
+		renderer.fitToContent(true);
+		callbacks.onViewChanged?.();
+	});
+	component.registerDomEvent(canvas, "contextmenu", (event: MouseEvent) => {
+		const pos = getPointerPosition(event);
+		const hitId = renderer.pick(pos.x, pos.y);
+		if (hitId && hitId !== CENTER_NODE_ID) {
+			event.preventDefault();
+			callbacks.onNodeContextMenu?.(hitId, event);
+		}
+	});
 	component.registerDomEvent(canvas, "pointerleave", () => tooltip.hide());
 }

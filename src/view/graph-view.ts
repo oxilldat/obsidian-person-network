@@ -5,10 +5,11 @@ import { DataStore, type GraphSnapshot } from "../data/store";
 import { exportCanvasAsPng } from "../export/png-export";
 import { t } from "../i18n";
 import { CanvasRenderer, type FilterState } from "../render/canvas-renderer";
-import { handleNodeClick } from "./context-actions";
+import { handleNodeClick, showNodeContextMenu } from "./context-actions";
 import { FilterPanel } from "./filter-panel";
 import { ghostTooltipLines, personTooltipLines, wireGraphInteraction } from "./graph-interaction";
 import { Tooltip } from "./tooltip";
+import { debounced } from "../utils/debounce";
 
 export const VIEW_TYPE_PERSON_NETWORK = "person-network-view";
 
@@ -22,6 +23,8 @@ export class PersonNetworkView extends ItemView {
 
 	private peopleById = new Map<string, PersonNode>();
 	private ghostsById = new Map<string, GhostNode>();
+	private lastDiagnostics = "";
+	private readonly persistState = debounced(() => this.saveViewState(), 300);
 
 	constructor(leaf: WorkspaceLeaf, plugin: PersonNetworkPlugin) {
 		super(leaf);
@@ -49,6 +52,19 @@ export class PersonNetworkView extends ItemView {
 		this.addChild(this.dataStore);
 
 		this.renderer = new CanvasRenderer(container, this.app, () => this.plugin.settings);
+		const saved = this.plugin.settings.graphState;
+		if (saved) {
+			this.renderer.filter = {
+				search: saved.search,
+				relationTypes: saved.relationTypes ? new Set(saved.relationTypes) : null,
+				companies: saved.companies ? new Set(saved.companies) : null,
+				showEdges: saved.showEdges,
+				showGhosts: saved.showGhosts,
+			};
+			this.renderer.setDisplay({ nodeScale: saved.nodeScale, edgeWidth: saved.edgeWidth });
+			this.renderer.setForces({ linkDistance: saved.linkDistance, repulsionStrength: saved.repulsionStrength, linkStrength: saved.linkStrength, centerStrength: saved.centerStrength });
+			if (saved.camera) this.renderer.restoreCamera(saved.camera);
+		}
 		this.tooltip = new Tooltip(container);
 		this.filterPanel = new FilterPanel(container, {
 			initialFilter: this.renderer.filter,
@@ -57,14 +73,22 @@ export class PersonNetworkView extends ItemView {
 			relationTypes: [],
 			companies: [],
 			onChange: (filter) => this.applyFilter(filter),
-			onForcesChange: (forces) => this.renderer?.setForces(forces),
-			onDisplayChange: (display) => this.renderer?.setDisplay(display),
+			onForcesChange: (forces) => { this.renderer?.setForces(forces); this.persistState(); },
+			onDisplayChange: (display) => { this.renderer?.setDisplay(display); this.persistState(); },
 			onReplayAnimation: () => this.renderer?.replayAnimation(),
 		});
 
 		wireGraphInteraction(this, this.renderer, this.tooltip, {
 			onNodeClick: (id) =>
 				handleNodeClick(this.app, this.plugin.settings, id, this.peopleById, this.ghostsById),
+			onNodeContextMenu: (id, event) => {
+				const person = this.peopleById.get(id);
+				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
+					await this.plugin.saveSettings();
+					this.dataStore?.reindex();
+				});
+			},
+			onViewChanged: () => this.persistState(),
 			getTooltipLines: (id) => {
 				const person = this.peopleById.get(id);
 				if (person) return personTooltipLines(person);
@@ -114,6 +138,17 @@ export class PersonNetworkView extends ItemView {
 		this.filterPanel?.updateAvailable(relationTypes, companies);
 
 		this.renderEmptyState(snapshot.people.length === 0);
+		this.showDiagnostics(snapshot);
+	}
+
+	private showDiagnostics(snapshot: GraphSnapshot): void {
+		const messages: string[] = [];
+		if (snapshot.diagnostics.multipleSelf.length > 1) messages.push(t("warning.multipleSelf", { value: snapshot.diagnostics.multipleSelf.join(", ") }));
+		if (snapshot.diagnostics.duplicateNames.length) messages.push(t("warning.duplicateNames", { value: snapshot.diagnostics.duplicateNames.join(", ") }));
+		if (snapshot.diagnostics.unknownRoles.length) messages.push(t("warning.unknownRoles", { value: snapshot.diagnostics.unknownRoles.join(", ") }));
+		const signature = messages.join("\n");
+		if (signature && signature !== this.lastDiagnostics) new Notice(signature, 8000);
+		this.lastDiagnostics = signature;
 	}
 
 	private renderEmptyState(isEmpty: boolean): void {
@@ -143,6 +178,25 @@ export class PersonNetworkView extends ItemView {
 		if (!this.renderer) return;
 		this.renderer.filter = filter;
 		this.renderer.requestRedraw();
+		this.persistState();
+	}
+
+	private saveViewState(): void {
+		if (!this.renderer) return;
+		const filter = this.renderer.filter;
+		const display = this.renderer.getDisplay();
+		const forces = this.renderer.getForces();
+		this.plugin.settings.graphState = {
+			search: filter.search,
+			relationTypes: filter.relationTypes ? [...filter.relationTypes] : null,
+			companies: filter.companies ? [...filter.companies] : null,
+			showEdges: filter.showEdges,
+			showGhosts: filter.showGhosts,
+			...display,
+			...forces,
+			camera: this.renderer.getCameraState(),
+		};
+		void this.plugin.saveGraphState();
 	}
 
 	private async exportPng(): Promise<void> {

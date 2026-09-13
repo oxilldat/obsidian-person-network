@@ -72,7 +72,8 @@ export function parsePerson(
 	const fm: Frontmatter = cache?.frontmatter ?? {};
 
 	const rawName = fm[settings.nameField];
-	const displayName = rawName !== undefined ? String(rawName) : file.basename;
+	const normalizedName = typeof rawName === "string" ? rawName.trim() : "";
+	const displayName = normalizedName || file.basename;
 
 	const rawPhoto = fm[settings.photoField];
 	const photoPath = rawPhoto ? resolvePhotoPath(app, String(rawPhoto), file.path) : undefined;

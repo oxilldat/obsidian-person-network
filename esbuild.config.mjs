@@ -30,6 +30,7 @@ const ctx = await esbuild.context({
 	format: "cjs",
 	target: "es2018",
 	logLevel: "info",
+	minify: isProduction,
 	sourcemap: isProduction ? false : "inline",
 	treeShaking: true,
 	outfile: "main.js",

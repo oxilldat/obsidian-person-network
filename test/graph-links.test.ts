@@ -21,6 +21,14 @@ describe("buildContactLinks", () => {
 		expect(edges).toEqual([{ sourceId: "a.md", targetId: "b.md" }]);
 	});
 
+	it("resolves a wikilink target path to the matching person", () => {
+		const alice = person("People/Alice.md", "Alice", ["People/Bob"]);
+		const bob = person("People/Bob.md", "Robert");
+		const { edges, ghosts } = buildContactLinks([alice, bob]);
+		expect(ghosts).toHaveLength(0);
+		expect(edges).toEqual([{ sourceId: "People/Alice.md", targetId: "People/Bob.md" }]);
+	});
+
 	it("creates a ghost when a contact name has no person", () => {
 		const people = [person("a.md", "Alice", ["Kyle Reese"])];
 		const { edges, ghosts } = buildContactLinks(people);

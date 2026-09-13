@@ -1,6 +1,6 @@
 import type { App } from "obsidian";
 import type { GraphSnapshot } from "../data/store";
-import type { PluginSettings, RingStyle } from "../data/types";
+import type { PhotoCropSettings, PluginSettings, RingStyle } from "../data/types";
 import { t } from "../i18n";
 import { Simulation, type SimNode } from "../sim/simulation";
 import { clamp, easeInCubic, easeOutCubic, lerp } from "../utils/geometry";
@@ -40,6 +40,7 @@ interface RenderMeta {
 	photoPath?: string;
 	relationType?: string;
 	company?: string;
+	photoCrop?: PhotoCropSettings;
 }
 
 const PERSON_RADIUS = 26;
@@ -182,6 +183,19 @@ export class CanvasRenderer {
 		return this.canvas;
 	}
 
+	getCameraState(): { scale: number; x: number; y: number } {
+		return { scale: this.camera.scale, x: this.camera.x, y: this.camera.y };
+	}
+
+	restoreCamera(state: { scale: number; x: number; y: number }): void {
+		this.camera.scale = clamp(state.scale, this.camera.minScale, this.camera.maxScale);
+		this.camera.x = state.x;
+		this.camera.y = state.y;
+		this.userMovedCamera = true;
+		this.autoFitPending = false;
+		this.requestRedraw();
+	}
+
 	hasVisibleContent(): boolean {
 		return this.simulation.nodes.length > 1;
 	}
@@ -231,10 +245,11 @@ export class CanvasRenderer {
 			kind: "center",
 			displayName: selfPerson?.displayName ?? settings.centerLabel ?? t("view.defaultCenterLabel"),
 			photoPath: selfPerson?.photoPath,
+			photoCrop: selfPerson ? settings.photoCrops?.[selfPerson.id] : undefined,
 		});
 
 		for (const person of snapshot.people) {
-			if (person.isSelf) continue;
+			if (person.id === selfPerson?.id) continue;
 			const prior = priorPositions.get(person.id);
 			const node: SimNode = {
 				id: person.id,
@@ -256,6 +271,7 @@ export class CanvasRenderer {
 				photoPath: person.photoPath,
 				relationType: person.relationType,
 				company: person.company,
+				photoCrop: settings.photoCrops?.[person.id],
 			});
 		}
 
@@ -660,7 +676,14 @@ export class CanvasRenderer {
 			ctx.save();
 			ctx.clip();
 			if (bitmap) {
-				ctx.drawImage(bitmap, node.x - radius, node.y - radius, size, size);
+				const cropSettings = meta.photoCrop;
+				const zoom = clamp(cropSettings?.zoom ?? 1, 1, 4);
+				const crop = Math.min(bitmap.width, bitmap.height) / zoom;
+				const centerX = clamp(cropSettings?.centerX ?? 0.5, 0, 1) * bitmap.width;
+				const centerY = clamp(cropSettings?.centerY ?? 0.5, 0, 1) * bitmap.height;
+				const sx = clamp(centerX - crop / 2, 0, bitmap.width - crop);
+				const sy = clamp(centerY - crop / 2, 0, bitmap.height - crop);
+				ctx.drawImage(bitmap, sx, sy, crop, crop, node.x - radius, node.y - radius, size, size);
 			} else {
 				ctx.fillStyle = secondaryBg;
 				ctx.fillRect(node.x - radius, node.y - radius, size, size);

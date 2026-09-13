@@ -20,9 +20,18 @@ export function buildContactLinks(
 	// Keep the first person per normalized name, so a duplicate display name
 	// resolves deterministically (vault file order) instead of last-wins.
 	const byNormalizedName = new Map<string, PersonNode>();
+	const ambiguousNames = new Set<string>();
 	for (const person of people) {
 		const key = normalizeName(person.displayName);
-		if (!byNormalizedName.has(key)) byNormalizedName.set(key, person);
+		if (byNormalizedName.has(key)) ambiguousNames.add(key);
+		else byNormalizedName.set(key, person);
+	}
+	const byPath = new Map<string, PersonNode>();
+	for (const person of people) {
+		const filePath = person.file.path || person.id;
+		byPath.set(normalizeName(filePath.replace(/\.md$/i, "")), person);
+		const basename = person.file.basename || person.id.replace(/\.md$/i, "").split("/").pop() || "";
+		byPath.set(normalizeName(basename), person);
 	}
 
 	const edges: GraphEdge[] = [];
@@ -31,7 +40,8 @@ export function buildContactLinks(
 
 	for (const person of people) {
 		for (const rawRef of person.ghostRefs) {
-			const realTarget = byNormalizedName.get(normalizeName(rawRef));
+			const refKey = normalizeName(rawRef.replace(/\.md$/i, ""));
+			const realTarget = byPath.get(refKey) ?? (ambiguousNames.has(refKey) ? undefined : byNormalizedName.get(refKey));
 
 			if (realTarget) {
 				// Matched a real person: an edge (or nothing, if it's a

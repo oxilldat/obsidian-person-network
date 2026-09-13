@@ -3,6 +3,7 @@ import type PersonNetworkPlugin from "../main";
 import type { GhostNode, PersonNode } from "../data/types";
 import { CanvasRenderer } from "../render/canvas-renderer";
 import { ghostTooltipLines, personTooltipLines, wireGraphInteraction } from "../view/graph-interaction";
+import { showNodeContextMenu } from "../view/context-actions";
 import { Tooltip } from "../view/tooltip";
 import { adaptEntries, type BasesFieldMapping } from "./entry-adapter";
 import { OPTION_KEYS } from "./options";
@@ -76,6 +77,13 @@ export class PersonNetworkBasesView extends BasesView {
 
 		wireGraphInteraction(this, this.renderer, this.tooltip, {
 			onNodeClick: (id) => this.handleClick(id),
+			onNodeContextMenu: (id, event) => {
+				const person = this.peopleById.get(id);
+				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
+					await this.plugin.saveSettings();
+					this.onDataUpdated();
+				});
+			},
 			getTooltipLines: (id) => {
 				const person = this.peopleById.get(id);
 				if (person) return personTooltipLines(person);
@@ -107,7 +115,9 @@ export class PersonNetworkBasesView extends BasesView {
 			// Native Bases "new note" menu: pre-fills properties so the created
 			// note matches the base's filters, plus our display-name field.
 			void this.createFileForView(ghost.displayName, (frontmatter: Record<string, unknown>) => {
-				frontmatter[this.plugin.settings.nameField] = ghost.displayName;
+				const mapped = this.readMapping().nameProp;
+				const field = mapped?.startsWith("note.") ? mapped.slice(5) : this.plugin.settings.nameField;
+				frontmatter[field] = ghost.displayName;
 			});
 		}
 	}

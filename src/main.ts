@@ -52,7 +52,7 @@ export default class PersonNetworkPlugin extends Plugin {
 	}
 
 	onunload(): void {
-		// no-op: leave existing leaves in place so the user's layout is preserved
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_PERSON_NETWORK);
 	}
 
 	async loadSettings(): Promise<void> {
@@ -73,6 +73,10 @@ export default class PersonNetworkPlugin extends Plugin {
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 		this.refreshOpenViews();
+	}
+
+	async saveGraphState(): Promise<void> {
+		await this.saveData(this.settings);
 	}
 
 	async activateView(): Promise<void> {

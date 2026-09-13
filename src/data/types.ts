@@ -55,4 +55,27 @@ export interface PluginSettings {
 	newNoteFolder: string;
 	/** Vault-relative path to a note whose content is used as the frontmatter template; empty = built-in fallback. */
 	newNoteTemplatePath: string;
+	graphState?: PersistedGraphState;
+	photoCrops?: Record<string, PhotoCropSettings>;
+}
+
+export interface PersistedGraphState {
+	search: string;
+	relationTypes: string[] | null;
+	companies: string[] | null;
+	showEdges: boolean;
+	showGhosts: boolean;
+	nodeScale: number;
+	edgeWidth: number;
+	linkDistance: number;
+	repulsionStrength: number;
+	linkStrength: number;
+	centerStrength: number;
+	camera?: { scale: number; x: number; y: number };
+}
+
+export interface PhotoCropSettings {
+	centerX: number;
+	centerY: number;
+	zoom: number;
 }

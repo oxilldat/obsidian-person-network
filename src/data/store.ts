@@ -8,11 +8,18 @@ export interface GraphSnapshot {
 	people: PersonNode[];
 	ghosts: GhostNode[];
 	edges: GraphEdge[];
+	diagnostics: GraphDiagnostics;
+}
+
+export interface GraphDiagnostics {
+	multipleSelf: string[];
+	duplicateNames: string[];
+	unknownRoles: string[];
 }
 
 type Listener = (snapshot: GraphSnapshot) => void;
 
-const EMPTY_SNAPSHOT: GraphSnapshot = { people: [], ghosts: [], edges: [] };
+const EMPTY_SNAPSHOT: GraphSnapshot = { people: [], ghosts: [], edges: [], diagnostics: { multipleSelf: [], duplicateNames: [], unknownRoles: [] } };
 
 /**
  * Owns the vault scan and keeps a live snapshot of people/ghosts/edges,
@@ -68,8 +75,18 @@ export class DataStore extends Component {
 		}
 
 		const { edges, ghosts } = buildContactLinks(people);
+		const counts = new Map<string, number>();
+		for (const person of people) {
+			const key = person.displayName.trim().toLowerCase();
+			counts.set(key, (counts.get(key) ?? 0) + 1);
+		}
+		const diagnostics: GraphDiagnostics = {
+			multipleSelf: people.filter((person) => person.isSelf).map((person) => person.displayName),
+			duplicateNames: [...counts].filter(([, count]) => count > 1).map(([name]) => name),
+			unknownRoles: [...new Set(people.map((person) => person.relationType).filter((role): role is string => !!role && !settings.roles[role]))],
+		};
 
-		this.snapshot = { people, ghosts, edges };
+		this.snapshot = { people, ghosts, edges, diagnostics };
 		for (const listener of this.listeners) listener(this.snapshot);
 	}
 }

@@ -1,25 +1,34 @@
-import { normalizePath, TFile, type App } from "obsidian";
+import { normalizePath, stringifyYaml, TFile, type App } from "obsidian";
 import type { PluginSettings } from "../data/types";
 
 function fillTemplate(template: string, name: string): string {
-	return template.split("{{name}}").join(name);
+	const match = template.match(/^(---\r?\n)([\s\S]*?)(\r?\n---)([\s\S]*)$/);
+	if (!match) return template.split("{{name}}").join(name);
+	const yaml = match[2].replace(/{{name}}/g, (_token, offset: number, source: string) => {
+		const before = source[offset - 1];
+		const after = source[offset + "{{name}}".length];
+		if (before === '"' && after === '"') return JSON.stringify(name).slice(1, -1);
+		if (before === "'" && after === "'") return name.replace(/'/g, "''");
+		return JSON.stringify(name);
+	});
+	return match[1] + yaml + match[3] + match[4].split("{{name}}").join(name);
 }
 
-function buildFallbackTemplate(settings: PluginSettings): string {
-	return `---\ntags:\n  - ${settings.personTag}\n${settings.nameField}: {{name}}\n---\n`;
+function buildFallbackTemplate(settings: PluginSettings, name: string): string {
+	return `---\n${stringifyYaml({ tags: [settings.personTag.replace(/^#/, "")], [settings.nameField]: name })}---\n`;
 }
 
-async function loadTemplate(app: App, settings: PluginSettings): Promise<string> {
+async function loadTemplate(app: App, settings: PluginSettings): Promise<string | undefined> {
 	const path = settings.newNoteTemplatePath.trim();
-	if (!path) return buildFallbackTemplate(settings);
+	if (!path) return undefined;
 
 	const file = app.vault.getAbstractFileByPath(normalizePath(path));
-	if (!(file instanceof TFile)) return buildFallbackTemplate(settings);
+	if (!(file instanceof TFile)) return undefined;
 
 	try {
 		return await app.vault.read(file);
 	} catch {
-		return buildFallbackTemplate(settings);
+		return undefined;
 	}
 }
 
@@ -27,9 +36,15 @@ async function ensureFolderExists(app: App, folder: string): Promise<void> {
 	const trimmed = folder.trim().replace(/\/+$/, "");
 	if (!trimmed) return;
 	const path = normalizePath(trimmed);
-	if (!app.vault.getAbstractFileByPath(path)) {
-		await app.vault.createFolder(path);
+	let current = "";
+	for (const part of path.split("/")) {
+		current = current ? `${current}/${part}` : part;
+		if (!app.vault.getAbstractFileByPath(current)) await app.vault.createFolder(current);
 	}
+}
+
+function safeFileName(name: string): string {
+	return name.replace(/[\\/:*?"<>|]/g, "-").replace(/[. ]+$/g, "").trim() || "Untitled person";
 }
 
 async function findAvailablePath(app: App, folder: string, baseName: string): Promise<string> {
@@ -57,9 +72,9 @@ export async function createNoteForGhostName(
 ): Promise<TFile | undefined> {
 	try {
 		await ensureFolderExists(app, settings.newNoteFolder);
-		const path = await findAvailablePath(app, settings.newNoteFolder, name);
+		const path = await findAvailablePath(app, settings.newNoteFolder, safeFileName(name));
 		const template = await loadTemplate(app, settings);
-		const content = fillTemplate(template, name);
+		const content = template === undefined ? buildFallbackTemplate(settings, name) : fillTemplate(template, name);
 		return await app.vault.create(path, content);
 	} catch {
 		return undefined;

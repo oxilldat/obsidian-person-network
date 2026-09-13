@@ -38,8 +38,9 @@ function appendCollapseTriangle(parent: HTMLElement): void {
 			"stroke-linecap": "round",
 			"stroke-linejoin": "round",
 		},
-		cls: "svg-icon right-triangle",
 	});
+	svg.addClass("svg-icon");
+	svg.addClass("right-triangle");
 	svg.createSvg("path", { attr: { d: "M3 8L12 17L21 8" } });
 }
 

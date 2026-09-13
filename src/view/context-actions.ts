@@ -1,7 +1,8 @@
-import { Modal, Notice, type App } from "obsidian";
+import { Menu, Modal, Notice, type App } from "obsidian";
 import type { GhostNode, PersonNode, PluginSettings } from "../data/types";
 import { createNoteForGhostName } from "../ghost/ghost-note-creator";
 import { t } from "../i18n";
+import { openPhotoCropEditor } from "../photo/crop-photo";
 
 class ConfirmCreateNoteModal extends Modal {
 	constructor(
@@ -31,6 +32,27 @@ class ConfirmCreateNoteModal extends Modal {
 	override onClose(): void {
 		this.contentEl.empty();
 	}
+}
+
+export function showNodeContextMenu(
+	app: App,
+	settings: PluginSettings,
+	person: PersonNode,
+	event: MouseEvent,
+	onSettingsChanged: () => Promise<void>,
+): void {
+	const menu = new Menu();
+	menu.addItem((item) => item.setTitle(t("photo.cropSquare")).setIcon("crop").setDisabled(!person.photoPath).onClick(() => {
+		if (!person.photoPath) return;
+		const initial = settings.photoCrops?.[person.id] ?? { centerX: 0.5, centerY: 0.5, zoom: 1 };
+		openPhotoCropEditor(app, person.photoPath, initial, async (crop) => {
+			settings.photoCrops ??= {};
+			settings.photoCrops[person.id] = crop;
+			await onSettingsChanged();
+			new Notice(t("photo.cropSuccess"));
+		});
+	}));
+	menu.showAtMouseEvent(event);
 }
 
 /** Routes a node click: a real person opens their note; a ghost offers to create one. */
