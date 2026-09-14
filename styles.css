@@ -324,8 +324,8 @@
 .person-network-crop-stage { display: flex; justify-content: center; width: 100%; overflow: hidden; }
 .person-network-crop-canvas {
 	display: block;
-	max-width: 100%;
-	height: auto !important;
+	width: min(420px, 100%);
+	height: auto;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m, 6px);
 	background: var(--background-secondary);

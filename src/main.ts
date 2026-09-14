@@ -51,10 +51,6 @@ export default class PersonNetworkPlugin extends Plugin {
 		});
 	}
 
-	onunload(): void {
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_PERSON_NETWORK);
-	}
-
 	async loadSettings(): Promise<void> {
 		const data = (await this.loadData()) as Partial<PluginSettings> | null;
 		const defaults = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as PluginSettings;

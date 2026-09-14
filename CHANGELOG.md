@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- Fixed plugin unload behavior so Person Network leaves keep their workspace position when the plugin is reloaded.
+- Removed deprecated dynamic slider tooltips from the photo framing editor.
+- Removed an unnecessary `!important` override from the photo editor canvas styles.
+
 ## 1.1.1
 
 - Added a non-destructive photo framing editor opened from the person context menu. Drag and zoom the image to select the square shown in the graph; framing settings are stored in plugin data without modifying the original image.

@@ -39,8 +39,6 @@ class PhotoCropModal extends Modal {
 		const ratio = this.modalEl.win.devicePixelRatio || 1;
 		this.canvas.width = Math.round(PREVIEW_SIZE * ratio);
 		this.canvas.height = Math.round(PREVIEW_SIZE * ratio);
-		this.canvas.style.width = `${PREVIEW_SIZE}px`;
-		this.canvas.style.height = `${PREVIEW_SIZE}px`;
 		this.restorePosition();
 
 		this.canvas.addEventListener("pointerdown", (event) => {
@@ -63,7 +61,7 @@ class PhotoCropModal extends Modal {
 		this.canvas.addEventListener("pointercancel", finishDrag);
 
 		new Setting(this.contentEl).setName(t("photo.zoom")).addSlider((slider) => slider
-			.setLimits(1, 4, 0.05).setValue(this.zoom).setDynamicTooltip().onChange((value) => this.setZoom(value)));
+			.setLimits(1, 4, 0.05).setValue(this.zoom).onChange((value) => this.setZoom(value)));
 
 		const buttons = this.contentEl.createDiv({ cls: "person-network-modal-buttons" });
 		buttons.createEl("button", { text: t("common.cancel") }).addEventListener("click", () => this.close());
