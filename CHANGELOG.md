@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4
+
+- Improved photo sharpness in cropped portraits, at high graph zoom and on high-DPI displays by retaining more source image detail in the bitmap cache.
+
 ## 1.1.3
 
 - Fixed the photo framing editor for the central `is_self` person. The editor is now available from the self node's context menu in both the standard graph and Bases view.

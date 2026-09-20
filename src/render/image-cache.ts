@@ -1,7 +1,11 @@
 import { TFile, type App } from "obsidian";
 
-/** Nodes render into ~52px squares; decoding photos larger than this wastes memory. */
-const MAX_BITMAP_SIZE = 128;
+/**
+ * Keep enough source pixels for cropped portraits at high camera zoom and on
+ * high-DPI displays. Cropping happens after this decode, so a 4x crop can use
+ * only one quarter of the bitmap's width or height.
+ */
+const MAX_BITMAP_SIZE = 1024;
 
 /**
  * Decodes vault photos into ImageBitmaps exactly once per path, using
