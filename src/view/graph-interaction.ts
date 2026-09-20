@@ -133,7 +133,7 @@ export function wireGraphInteraction(
 	component.registerDomEvent(canvas, "contextmenu", (event: MouseEvent) => {
 		const pos = getPointerPosition(event);
 		const hitId = renderer.pick(pos.x, pos.y);
-		if (hitId && hitId !== CENTER_NODE_ID) {
+		if (hitId) {
 			event.preventDefault();
 			callbacks.onNodeContextMenu?.(hitId, event);
 		}

@@ -1,7 +1,7 @@
 import { BasesView, TFile, type BasesPropertyId, type QueryController } from "obsidian";
 import type PersonNetworkPlugin from "../main";
 import type { GhostNode, PersonNode } from "../data/types";
-import { CanvasRenderer } from "../render/canvas-renderer";
+import { CENTER_NODE_ID, CanvasRenderer } from "../render/canvas-renderer";
 import { ghostTooltipLines, personTooltipLines, wireGraphInteraction } from "../view/graph-interaction";
 import { showNodeContextMenu } from "../view/context-actions";
 import { Tooltip } from "../view/tooltip";
@@ -78,7 +78,9 @@ export class PersonNetworkBasesView extends BasesView {
 		wireGraphInteraction(this, this.renderer, this.tooltip, {
 			onNodeClick: (id) => this.handleClick(id),
 			onNodeContextMenu: (id, event) => {
-				const person = this.peopleById.get(id);
+				const person = id === CENTER_NODE_ID
+					? [...this.peopleById.values()].find((candidate) => candidate.isSelf)
+					: this.peopleById.get(id);
 				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
 					await this.plugin.saveSettings();
 					this.onDataUpdated();

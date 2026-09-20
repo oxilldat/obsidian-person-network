@@ -4,7 +4,7 @@ import type { GhostNode, PersonNode } from "../data/types";
 import { DataStore, type GraphSnapshot } from "../data/store";
 import { exportCanvasAsPng } from "../export/png-export";
 import { t } from "../i18n";
-import { CanvasRenderer, type FilterState } from "../render/canvas-renderer";
+import { CENTER_NODE_ID, CanvasRenderer, type FilterState } from "../render/canvas-renderer";
 import { handleNodeClick, showNodeContextMenu } from "./context-actions";
 import { FilterPanel } from "./filter-panel";
 import { ghostTooltipLines, personTooltipLines, wireGraphInteraction } from "./graph-interaction";
@@ -82,7 +82,9 @@ export class PersonNetworkView extends ItemView {
 			onNodeClick: (id) =>
 				handleNodeClick(this.app, this.plugin.settings, id, this.peopleById, this.ghostsById),
 			onNodeContextMenu: (id, event) => {
-				const person = this.peopleById.get(id);
+				const person = id === CENTER_NODE_ID
+					? [...this.peopleById.values()].find((candidate) => candidate.isSelf)
+					: this.peopleById.get(id);
 				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
 					await this.plugin.saveSettings();
 					this.dataStore?.reindex();
