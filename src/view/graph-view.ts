@@ -60,7 +60,7 @@ export class PersonNetworkView extends ItemView {
 		this.layerPanel = new LayerPanel(container, layerScope.layers, () => {
 			this.renderer?.setLayers(layerScope.layers);
 			void this.plugin.saveGraphState();
-		});
+		}, (open) => { if (open) this.filterPanel?.close(); });
 		const saved = this.plugin.settings.graphState;
 		if (saved) {
 			this.renderer.filter = {
@@ -85,6 +85,7 @@ export class PersonNetworkView extends ItemView {
 			onForcesChange: (forces) => { this.renderer?.setForces(forces); this.persistState(); },
 			onDisplayChange: (display) => { this.renderer?.setDisplay(display); this.persistState(); },
 			onReplayAnimation: () => this.renderer?.replayAnimation(),
+			onOpenChange: (open) => { if (open) this.layerPanel?.close(); },
 		});
 
 		wireGraphInteraction(this, this.renderer, this.tooltip, {

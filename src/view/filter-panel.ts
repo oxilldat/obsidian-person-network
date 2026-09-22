@@ -14,6 +14,7 @@ export interface FilterPanelOptions {
 	onForcesChange: (forces: ForcesState) => void;
 	onDisplayChange: (display: DisplayState) => void;
 	onReplayAnimation: () => void;
+	onOpenChange?: (open: boolean) => void;
 }
 
 function arraysEqual(a: string[], b: string[]): boolean {
@@ -68,6 +69,7 @@ export class FilterPanel {
 	private readonly onForcesChange: (forces: ForcesState) => void;
 	private readonly onDisplayChange: (display: DisplayState) => void;
 	private readonly onReplayAnimation: () => void;
+	private readonly onOpenChange?: (open: boolean) => void;
 
 	constructor(container: HTMLElement, options: FilterPanelOptions) {
 		this.filter = { ...options.initialFilter };
@@ -82,6 +84,7 @@ export class FilterPanel {
 		this.onForcesChange = options.onForcesChange;
 		this.onDisplayChange = options.onDisplayChange;
 		this.onReplayAnimation = options.onReplayAnimation;
+		this.onOpenChange = options.onOpenChange;
 
 		this.rootEl = container.createDiv({ cls: "person-network-panel-root is-close" });
 
@@ -117,6 +120,11 @@ export class FilterPanel {
 
 	private setOpen(open: boolean): void {
 		this.rootEl.toggleClass("is-close", !open);
+		this.onOpenChange?.(open);
+	}
+
+	close(): void {
+		this.setOpen(false);
 	}
 
 	private resetToDefaults(): void {

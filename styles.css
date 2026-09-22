@@ -110,7 +110,7 @@
 	position: absolute;
 	top: var(--size-4-3, 12px);
 	right: var(--size-4-3, 12px);
-	z-index: 30;
+	z-index: 32;
 	padding: 0;
 	background-color: var(--menu-background, var(--background-primary));
 	width: 240px;

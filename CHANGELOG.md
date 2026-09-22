@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+- Fixed the layer button and layer panel appearing above the open graph controls.
+- Opening either graph controls or layers now closes the other panel.
+
 ## 1.2.0
 
 - Added configurable visual layers with independent definitions for the standalone graph and each Bases view.

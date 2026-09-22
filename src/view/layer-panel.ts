@@ -11,6 +11,7 @@ export class LayerPanel {
 		container: HTMLElement,
 		layers: GraphLayer[],
 		private readonly onChange: (layers: GraphLayer[]) => void,
+		private readonly onOpenChange?: (open: boolean) => void,
 	) {
 		this.layers = layers;
 		this.rootEl = container.createDiv({ cls: "person-network-layer-panel is-close" });
@@ -19,7 +20,7 @@ export class LayerPanel {
 			attr: { type: "button", "aria-label": t("layers.panelTitle") },
 		});
 		setIcon(open, "layers");
-		open.addEventListener("click", () => this.rootEl.removeClass("is-close"));
+		open.addEventListener("click", () => this.setOpen(true));
 
 		const header = this.rootEl.createDiv({ cls: "person-network-layer-panel-header" });
 		header.createSpan({ text: t("layers.panelTitle") });
@@ -28,7 +29,7 @@ export class LayerPanel {
 			attr: { type: "button", "aria-label": t("common.close") },
 		});
 		setIcon(close, "x");
-		close.addEventListener("click", () => this.rootEl.addClass("is-close"));
+		close.addEventListener("click", () => this.setOpen(false));
 
 		this.listEl = this.rootEl.createDiv({ cls: "person-network-layer-list" });
 		this.render();
@@ -41,6 +42,15 @@ export class LayerPanel {
 
 	destroy(): void {
 		this.rootEl.remove();
+	}
+
+	close(): void {
+		this.setOpen(false);
+	}
+
+	private setOpen(open: boolean): void {
+		this.rootEl.toggleClass("is-close", !open);
+		this.onOpenChange?.(open);
 	}
 
 	private render(): void {
