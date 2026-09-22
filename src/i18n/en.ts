@@ -104,6 +104,8 @@ const en = {
 	"settings.newNoteTemplatePath.desc":
 		"Pick an existing note whose content is used as the frontmatter template; leave empty for a built-in default. Use {{name}} inside it as a placeholder for the person's name.",
 	"settings.newNoteTemplatePath.placeholder": "Search a note…",
+	"settings.author.title": "Enjoying the plugin?",
+	"settings.author.body": "Support the project or follow me",
 } as const;
 
 export default en;

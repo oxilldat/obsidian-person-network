@@ -107,6 +107,8 @@ const ru: Record<keyof typeof en, string> = {
 	"settings.newNoteTemplatePath.desc":
 		"Выберите существующую заметку, чьё содержимое станет шаблоном frontmatter; пусто — используется встроенный шаблон по умолчанию. Используйте {{name}} внутри неё как подстановку имени человека.",
 	"settings.newNoteTemplatePath.placeholder": "Поиск заметки…",
+	"settings.author.title": "Нравится плагин?",
+	"settings.author.body": "Поддержите проект или подпишитесь",
 };
 
 export default ru;

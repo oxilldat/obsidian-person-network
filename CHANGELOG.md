@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.5
+
+- Added a compact author card at the end of the settings page with links to Telegram, Boosty and YouTube.
+- Added localized Russian and English call-to-action text and a responsive layout for narrow settings panes.
+
 ## 1.1.4
 
 - Improved photo sharpness in cropped portraits, at high graph zoom and on high-DPI displays by retaining more source image detail in the bitmap cache.

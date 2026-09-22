@@ -5,6 +5,7 @@ import type PersonNetworkPlugin from "../main";
 import { DEFAULT_SETTINGS } from "./defaults";
 import { MarkdownFileSuggest } from "./file-suggest";
 import { TagSuggest } from "./tag-suggest";
+import authorAvatar from "../../assets/ava.jpg";
 
 const RING_STYLES: RingStyle[] = ["solid", "dashed", "dotted"];
 const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -55,6 +56,41 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 		this.renderNewNoteSection(containerEl);
 		this.renderRolesSection(containerEl);
 		this.renderPersonDetectionSection(containerEl);
+		this.renderAuthorCard(containerEl);
+	}
+
+	private renderAuthorCard(containerEl: HTMLElement): void {
+		const card = containerEl.createDiv({ cls: "person-network-author-card" });
+		const top = card.createDiv({ cls: "person-network-author-top" });
+		top.createEl("img", {
+			cls: "person-network-author-avatar",
+			attr: { src: authorAvatar, alt: "oxill" },
+		});
+		const copy = top.createDiv({ cls: "person-network-author-copy" });
+		copy.createEl("h3", { text: t("settings.author.title") });
+		copy.createEl("p", { text: t("settings.author.body") });
+
+		const links = card.createDiv({ cls: "person-network-social-links" });
+		this.addSocialButton(links, "telegram", "Telegram", "https://t.me/oxilldat",
+			"M21.7 3.4 18.5 19c-.2 1.1-.9 1.4-1.8.9l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.4-5 9-8.1c.4-.4-.1-.6-.6-.2L6.1 12.8 1.3 11.3c-1-.3-1-1 .2-1.5L20.3 2.6c.9-.3 1.7.2 1.4.8Z");
+		this.addSocialButton(links, "boosty", "Boosty", "https://boosty.to/oxilldat",
+			"m13.1 2-3.8 7.4 2.5.1-3.7 6.7 3.4.1L9.7 22c5.5-1.8 9-5.2 9-9.2 0-2.8-1.8-4.8-4.5-5.5L16.6 2h-3.5Zm-.8 17.1 1.2-4.4-2.6-.1 3.4-6.2c1.6.5 2.6 1.8 2.6 3.7 0 2.7-1.7 5-4.6 7Z");
+		this.addSocialButton(links, "youtube", "YouTube", "https://www.youtube.com/@oxilldat",
+			"M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.8 12l-6.2 3.6Z");
+	}
+
+	private addSocialButton(parent: HTMLElement, brand: string, label: string, url: string, pathData: string): void {
+		const link = parent.createEl("a", {
+			cls: `person-network-social-button is-${brand}`,
+			attr: { href: url, target: "_blank", rel: "noopener noreferrer", "aria-label": label, title: label },
+		});
+		const svg = parent.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
+		svg.setAttribute("viewBox", "0 0 24 24");
+		svg.setAttribute("aria-hidden", "true");
+		const path = parent.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "path");
+		path.setAttribute("d", pathData);
+		svg.appendChild(path);
+		link.appendChild(svg);
 	}
 
 	private async save(): Promise<void> {

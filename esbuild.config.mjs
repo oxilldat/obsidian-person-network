@@ -28,6 +28,7 @@ const ctx = await esbuild.context({
 		...builtinModules.map((m) => `node:${m}`),
 	],
 	format: "cjs",
+	loader: { ".jpg": "dataurl" },
 	target: "es2018",
 	logLevel: "info",
 	minify: isProduction,

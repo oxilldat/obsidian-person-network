@@ -333,3 +333,58 @@
 	cursor: grab;
 }
 .person-network-crop-canvas:active { cursor: grabbing; }
+
+.person-network-author-card {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	margin-top: 32px;
+	padding: 16px;
+	border-radius: 12px;
+	background: var(--background-secondary);
+}
+
+.person-network-author-top {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.person-network-author-avatar {
+	width: 50px;
+	height: 50px;
+	flex: 0 0 50px;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.person-network-author-copy { min-width: 0; }
+.person-network-author-copy h3 { margin: 0 0 3px; padding: 0; font-size: var(--font-ui-medium); }
+.person-network-author-copy p { margin: 0; color: var(--text-muted); line-height: 1.45; }
+.person-network-social-links { display: flex; flex: 0 0 auto; gap: 8px; }
+
+.person-network-author-card a.person-network-social-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 42px;
+	height: 42px;
+	border-radius: 10px;
+	color: #fff;
+	text-decoration: none;
+	transition: filter 120ms ease, opacity 120ms ease;
+}
+
+.person-network-social-button:hover { filter: brightness(1.12); }
+.person-network-social-button:active { opacity: .82; }
+.person-network-social-button.is-telegram { background: #229ed9; }
+.person-network-social-button.is-boosty { background: #f15f2c; }
+.person-network-social-button.is-youtube { background: #f00; }
+.person-network-social-button svg { width: 23px; height: 23px; fill: currentColor; }
+
+@media (max-width: 700px) {
+	.person-network-author-card { align-items: flex-start; flex-direction: column; }
+	.person-network-social-links { margin-left: 64px; }
+}
