@@ -32,6 +32,25 @@ export interface PersonRole {
 	positionScore: number; // 1-10, 10 = closest to center
 }
 
+export interface GraphLayer {
+	id: string;
+	name: string;
+	identifier: string;
+	icon: string;
+	color: string;
+	priority: number;
+	showLabel: boolean;
+	showIcon: boolean;
+	showArea: boolean;
+	showMembers: boolean;
+}
+
+export interface GraphLayerScope {
+	id: string;
+	label: string;
+	layers: GraphLayer[];
+}
+
 export interface PluginSettings {
 	// Structural / person-detection
 	/** Tag (without '#') identifying a person note. */
@@ -57,6 +76,8 @@ export interface PluginSettings {
 	newNoteTemplatePath: string;
 	graphState?: PersistedGraphState;
 	photoCrops?: Record<string, PhotoCropSettings>;
+	layerField: string;
+	layerScopes?: Record<string, GraphLayerScope>;
 }
 
 export interface PersistedGraphState {
@@ -71,6 +92,7 @@ export interface PersistedGraphState {
 	repulsionStrength: number;
 	linkStrength: number;
 	centerStrength: number;
+	companyStrength?: number;
 	camera?: { scale: number; x: number; y: number };
 }
 

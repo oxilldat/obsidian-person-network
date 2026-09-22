@@ -9,6 +9,8 @@ import { handleNodeClick, showNodeContextMenu } from "./context-actions";
 import { FilterPanel } from "./filter-panel";
 import { ghostTooltipLines, personTooltipLines, wireGraphInteraction } from "./graph-interaction";
 import { Tooltip } from "./tooltip";
+import { LayerPanel } from "./layer-panel";
+import { resolveLayerMembers } from "../layers/membership";
 import { debounced } from "../utils/debounce";
 
 export const VIEW_TYPE_PERSON_NETWORK = "person-network-view";
@@ -20,6 +22,7 @@ export class PersonNetworkView extends ItemView {
 	private renderer: CanvasRenderer | null = null;
 	private filterPanel: FilterPanel | null = null;
 	private tooltip: Tooltip | null = null;
+	private layerPanel: LayerPanel | null = null;
 
 	private peopleById = new Map<string, PersonNode>();
 	private ghostsById = new Map<string, GhostNode>();
@@ -52,6 +55,12 @@ export class PersonNetworkView extends ItemView {
 		this.addChild(this.dataStore);
 
 		this.renderer = new CanvasRenderer(container, this.app, () => this.plugin.settings);
+		const layerScope = this.plugin.getLayerScope("standalone", t("view.displayName"));
+		this.renderer.setLayers(layerScope.layers);
+		this.layerPanel = new LayerPanel(container, layerScope.layers, () => {
+			this.renderer?.setLayers(layerScope.layers);
+			void this.plugin.saveGraphState();
+		});
 		const saved = this.plugin.settings.graphState;
 		if (saved) {
 			this.renderer.filter = {
@@ -62,7 +71,7 @@ export class PersonNetworkView extends ItemView {
 				showGhosts: saved.showGhosts,
 			};
 			this.renderer.setDisplay({ nodeScale: saved.nodeScale, edgeWidth: saved.edgeWidth });
-			this.renderer.setForces({ linkDistance: saved.linkDistance, repulsionStrength: saved.repulsionStrength, linkStrength: saved.linkStrength, centerStrength: saved.centerStrength });
+			this.renderer.setForces({ linkDistance: saved.linkDistance, repulsionStrength: saved.repulsionStrength, linkStrength: saved.linkStrength, centerStrength: saved.centerStrength, companyStrength: saved.companyStrength ?? 0.04 });
 			if (saved.camera) this.renderer.restoreCamera(saved.camera);
 		}
 		this.tooltip = new Tooltip(container);
@@ -87,8 +96,10 @@ export class PersonNetworkView extends ItemView {
 					: this.peopleById.get(id);
 				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
 					await this.plugin.saveSettings();
+					this.renderer?.setLayers(layerScope.layers);
+					this.layerPanel?.update(layerScope.layers);
 					this.dataStore?.reindex();
-				});
+				}, layerScope.layers);
 			},
 			onViewChanged: () => this.persistState(),
 			getTooltipLines: (id) => {
@@ -117,10 +128,14 @@ export class PersonNetworkView extends ItemView {
 		this.renderer?.destroy();
 		this.filterPanel?.destroy();
 		this.tooltip?.destroy();
+		this.layerPanel?.destroy();
 	}
 
 	/** Called by the plugin after settings change, so role edits etc. show up without reopening the view. */
 	onSettingsChanged(): void {
+		const layerScope = this.plugin.getLayerScope("standalone", t("view.displayName"));
+		this.renderer?.setLayers(layerScope.layers);
+		this.layerPanel?.update(layerScope.layers);
 		this.dataStore?.reindex();
 		this.renderer?.requestRedraw();
 	}
@@ -129,6 +144,8 @@ export class PersonNetworkView extends ItemView {
 		this.peopleById = new Map(snapshot.people.map((person) => [person.id, person]));
 		this.ghostsById = new Map(snapshot.ghosts.map((ghost) => [ghost.id, ghost]));
 
+		const layerScope = this.plugin.getLayerScope("standalone", t("view.displayName"));
+		this.renderer?.setLayers(layerScope.layers, resolveLayerMembers(this.app, snapshot.people, layerScope.layers, this.plugin.settings.layerField));
 		this.renderer?.setGraph(snapshot);
 
 		const relationTypes = [

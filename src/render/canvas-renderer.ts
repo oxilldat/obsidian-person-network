@@ -1,6 +1,6 @@
-import type { App } from "obsidian";
+import { setIcon, type App } from "obsidian";
 import type { GraphSnapshot } from "../data/store";
-import type { PhotoCropSettings, PluginSettings, RingStyle } from "../data/types";
+import type { GraphLayer, PhotoCropSettings, PluginSettings, RingStyle } from "../data/types";
 import { t } from "../i18n";
 import { Simulation, type SimNode } from "../sim/simulation";
 import { clamp, easeInCubic, easeOutCubic, lerp } from "../utils/geometry";
@@ -23,6 +23,7 @@ export interface ForcesState {
 	repulsionStrength: number;
 	linkStrength: number;
 	centerStrength: number;
+	companyStrength: number;
 }
 
 export interface DisplayState {
@@ -41,6 +42,7 @@ interface RenderMeta {
 	relationType?: string;
 	company?: string;
 	photoCrop?: PhotoCropSettings;
+	personId?: string;
 }
 
 const PERSON_RADIUS = 26;
@@ -61,6 +63,8 @@ const POP_IN_START_SCALE = 0.2;
 const EDGE_FADE_MS = 420;
 const FIT_PADDING = 60;
 const FIT_TWEEN_MS = 340;
+const LAYER_PADDING = 32;
+const LAYER_CORNER_RADIUS = 20;
 
 interface CameraTween {
 	startScale: number;
@@ -88,6 +92,17 @@ function roundedSquarePath(ctx: CanvasRenderingContext2D, cx: number, cy: number
 	ctx.arcTo(x + size, y + size, x, y + size, r);
 	ctx.arcTo(x, y + size, x, y, r);
 	ctx.arcTo(x, y, x + size, y, r);
+	ctx.closePath();
+}
+
+function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
+	const r = Math.min(Math.max(radius, 0), width / 2, height / 2);
+	ctx.beginPath();
+	ctx.moveTo(x + r, y);
+	ctx.arcTo(x + width, y, x + width, y + height, r);
+	ctx.arcTo(x + width, y + height, x, y + height, r);
+	ctx.arcTo(x, y + height, x, y, r);
+	ctx.arcTo(x, y, x + width, y, r);
 	ctx.closePath();
 }
 
@@ -139,6 +154,10 @@ export class CanvasRenderer {
 	private readonly resizeObserver: ResizeObserver;
 	private readonly imageCache: ImageCache;
 	private readonly themeColors: ThemeColorCache;
+	private readonly layerLabelsEl: HTMLElement;
+	private layers: GraphLayer[] = [];
+	private layerMembers: Record<string, string[]> = {};
+	private hiddenMemberIds = new Set<string>();
 	private readonly requestedPhotos = new Set<string>();
 
 	private width = 1;
@@ -167,6 +186,7 @@ export class CanvasRenderer {
 		this.win = container.win;
 
 		this.canvas = container.createEl("canvas", { cls: "person-network-canvas" });
+		this.layerLabelsEl = container.createDiv({ cls: "person-network-layer-labels" });
 		const ctx = this.canvas.getContext("2d");
 		if (!ctx) throw new Error("2D canvas context is unavailable");
 		this.ctx = ctx;
@@ -181,6 +201,15 @@ export class CanvasRenderer {
 
 	getCanvasElement(): HTMLCanvasElement {
 		return this.canvas;
+	}
+
+	setLayers(layers: GraphLayer[], members?: Record<string, string[]>): void {
+		this.layers = layers;
+		if (members) this.layerMembers = members;
+		this.hiddenMemberIds = new Set(layers
+			.filter((layer) => !layer.showMembers)
+			.flatMap((layer) => this.layerMembers[layer.id] ?? []));
+		this.requestRedraw();
 	}
 
 	getCameraState(): { scale: number; x: number; y: number } {
@@ -246,6 +275,7 @@ export class CanvasRenderer {
 			displayName: selfPerson?.displayName ?? settings.centerLabel ?? t("view.defaultCenterLabel"),
 			photoPath: selfPerson?.photoPath,
 			photoCrop: selfPerson ? settings.photoCrops?.[selfPerson.id] : undefined,
+			personId: selfPerson?.id,
 		});
 
 		for (const person of snapshot.people) {
@@ -262,6 +292,7 @@ export class CanvasRenderer {
 				radius: PERSON_RADIUS,
 				targetRadius: scoreToOrbitRadius(person.positionScore),
 				isCenter: false,
+				company: person.company,
 			};
 			nodes.push(node);
 			nodeById.set(person.id, node);
@@ -272,6 +303,7 @@ export class CanvasRenderer {
 				relationType: person.relationType,
 				company: person.company,
 				photoCrop: settings.photoCrops?.[person.id],
+				personId: person.id,
 			});
 		}
 
@@ -459,7 +491,8 @@ export class CanvasRenderer {
 			linkDistance: c.linkDistance,
 			repulsionStrength: c.repulsionStrength,
 			linkStrength: c.linkStrength,
-			centerStrength: c.centerStrength,
+				centerStrength: c.centerStrength,
+				companyStrength: c.companyStrength,
 		};
 	}
 
@@ -517,6 +550,7 @@ export class CanvasRenderer {
 		this.resizeObserver.disconnect();
 		if (this.rafHandle !== null) this.win.cancelAnimationFrame(this.rafHandle);
 		this.imageCache.clear();
+		this.layerLabelsEl.remove();
 		this.canvas.remove();
 	}
 
@@ -581,6 +615,7 @@ export class CanvasRenderer {
 	}
 
 	private isVisible(meta: RenderMeta): boolean {
+		if (meta.personId && this.hiddenMemberIds.has(meta.personId)) return false;
 		if (meta.kind === "ghost") return this.filter.showGhosts;
 		if (meta.kind === "person") {
 			if (this.filter.relationTypes && (!meta.relationType || !this.filter.relationTypes.has(meta.relationType))) {
@@ -591,6 +626,58 @@ export class CanvasRenderer {
 			}
 		}
 		return true;
+	}
+
+	private drawLayers(ctx: CanvasRenderingContext2D): void {
+		this.layerLabelsEl.empty();
+		const ordered = [...this.layers].sort((a, b) => a.priority - b.priority);
+		for (const layer of ordered) {
+			if (!layer.showArea) continue;
+			const memberSet = new Set(this.layerMembers[layer.id] ?? []);
+			const members = this.simulation.nodes.filter((node) => {
+				const meta = this.renderMeta.get(node.id);
+				return !!meta?.personId && memberSet.has(meta.personId) && this.isVisible(meta);
+			});
+			if (members.length < 2) continue;
+			const padding = LAYER_PADDING;
+			const minX = Math.min(...members.map((node) => node.x - node.radius)) - padding;
+			const minY = Math.min(...members.map((node) => node.y - node.radius)) - padding;
+			const maxX = Math.max(...members.map((node) => node.x + node.radius)) + padding;
+			const maxY = Math.max(...members.map((node) => node.y + node.radius)) + padding;
+			roundedRectPath(ctx, minX, minY, maxX - minX, maxY - minY, LAYER_CORNER_RADIUS);
+			ctx.save();
+			ctx.fillStyle = layer.color;
+			ctx.globalAlpha = 0.1;
+			ctx.fill();
+			ctx.globalAlpha = 0.45;
+			ctx.strokeStyle = layer.color;
+			ctx.lineWidth = 1.5;
+			ctx.stroke();
+			ctx.restore();
+
+			if (layer.showLabel || layer.showIcon) {
+				const label = this.layerLabelsEl.createDiv({ cls: "person-network-layer-label" });
+				label.style.left = `${this.camera.x + minX * this.camera.scale}px`;
+				label.style.top = `${this.camera.y + minY * this.camera.scale}px`;
+				label.style.borderColor = layer.color;
+				label.style.backgroundColor = layer.color;
+				label.style.color = this.contrastTextColor(layer.color);
+				if (layer.showIcon) {
+					const icon = label.createSpan({ cls: "person-network-layer-label-icon" });
+					setIcon(icon, layer.icon || "layers");
+				}
+				if (layer.showLabel) label.createSpan({ text: layer.name });
+			}
+		}
+	}
+
+	private contrastTextColor(color: string): string {
+		const hex = color.replace(/^#/, "");
+		if (!/^[0-9a-f]{6}$/i.test(hex)) return "#ffffff";
+		const r = Number.parseInt(hex.slice(0, 2), 16);
+		const g = Number.parseInt(hex.slice(2, 4), 16);
+		const b = Number.parseInt(hex.slice(4, 6), 16);
+		return (r * 299 + g * 587 + b * 114) / 1000 > 110 ? "#111111" : "#ffffff";
 	}
 
 	private draw(): void {
@@ -624,6 +711,8 @@ export class CanvasRenderer {
 		const viewMaxY = bottomRight.y + margin;
 		const nodeVisible = (x: number, y: number): boolean =>
 			x >= viewMinX && x <= viewMaxX && y >= viewMinY && y <= viewMaxY;
+
+		this.drawLayers(ctx);
 
 		const edgeReveal = clamp((now - this.edgesRevealAt) / EDGE_FADE_MS, 0, 1);
 		if (this.filter.showEdges && edgeReveal > 0) {

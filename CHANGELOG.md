@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- Added configurable visual layers with independent definitions for the standalone graph and each Bases view.
+- Added layer assignment through a shared frontmatter list and the person context menu.
+- Added translucent overlapping layer areas, custom colors, Obsidian icons, labels, drawing priority, and separate controls for hiding areas or members.
+- Added company-based attraction with an adjustable graph physics control.
+- Added a compact searchable icon picker and collapsible layer settings.
+- Updated Russian and English documentation for the current feature set.
+
 ## 1.1.5
 
 - Added a compact author card at the end of the settings page with links to Telegram, Boosty and YouTube.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Simulation } from "../src/sim/simulation";
 import type { SimNode } from "../src/sim/types";
+import { applyCompanyForce } from "../src/sim/forces";
 
 function node(id: string, x: number, y: number, overrides: Partial<SimNode> = {}): SimNode {
 	return {
@@ -19,6 +20,16 @@ function node(id: string, x: number, y: number, overrides: Partial<SimNode> = {}
 }
 
 describe("Simulation", () => {
+	it("pulls coworkers toward their shared centroid without moving singletons", () => {
+		const left = node("left", -100, 0, { company: "Acme" });
+		const right = node("right", 100, 0, { company: "Acme" });
+		const singleton = node("single", 200, 0, { company: "Solo" });
+		applyCompanyForce([left, right, singleton], 1, 0.1);
+		expect(left.vx).toBeGreaterThan(0);
+		expect(right.vx).toBeLessThan(0);
+		expect(singleton.vx).toBe(0);
+	});
+
 	it("starts settled and reheats above the settle threshold", () => {
 		const sim = new Simulation();
 		expect(sim.isSettled()).toBe(true);

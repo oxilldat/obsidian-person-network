@@ -288,6 +288,10 @@ export class FilterPanel {
 				this.forces.centerStrength = value;
 				this.emitForcesChange();
 			});
+			this.sliderRow(content, "panel.companyStrength", { min: 0, max: 0.15, step: 0.01 }, this.forces.companyStrength, (value) => {
+				this.forces.companyStrength = value;
+				this.emitForcesChange();
+			});
 		});
 	}
 }

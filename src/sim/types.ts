@@ -11,6 +11,7 @@ export interface SimNode {
 	/** Desired distance from the graph center, driven by positionScore. */
 	targetRadius: number;
 	isCenter: boolean;
+	company?: string;
 }
 
 export interface SimLink {

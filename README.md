@@ -1,45 +1,42 @@
 # Person Network
 
-An Obsidian plugin that draws the people in your vault as an interactive, canvas-rendered relationship map. People are read from note frontmatter, positioned by a configurable role, connected by their listed contacts, and controlled through an in-graph panel modeled on Obsidian's own Graph view. The plugin can also run as a native view inside Bases.
+Person Network turns person notes in an Obsidian vault into an interactive relationship map. It reads people, photos, roles, companies, contacts, and layers from frontmatter and renders them on a fast canvas graph. Use it as a standalone view or as a native view inside Bases.
 
-Read this in another language: [Русский](README.ru.md)
+[Русская версия](README.ru.md)
 
-![alt text](image/graph-overview.gif)
+![Person Network graph](image/graph-overview.gif)
 
 ## Features
 
-- Canvas rendering with a dependency-free force simulation. The animation loop stops entirely once the layout settles, so an idle graph uses no CPU.
-- People are detected by a single configurable tag. No separate index or data file is required; everything comes from note frontmatter.
-- Roles map a relation value (for example friend, family, colleague) to a ring color, a ring stroke style (solid, dashed, dotted) and a position score from 1 to 10 that sets how close the person orbits the center.
-- A center node represents you, taken from the note marked with `is_self`, or a generic placeholder when none is marked.
-- Photos are drawn on nodes, decoded once and downscaled to save memory. A silhouette is shown when a photo is missing or fails to load.
-- Photos keep their proportions. Right-click a person to choose the visible square with drag and zoom controls; the non-destructive framing is stored in plugin data.
-- Potential contacts: names listed in a note that do not have their own note yet appear as distinct ghost nodes. Clicking a ghost offers to create its note.
-- Relationship lines are drawn between people who reference each other by name.
-- An in-graph control panel with search, filters by relation type and company, display options and force sliders, built to match the layout of Obsidian's core Graph view.
-- Appearance animation: nodes fade and grow in from the center outward, then the connections fade in.
-- Zoom to fit, smooth camera framing, pan, wheel zoom, node dragging and double-click to refit.
-- Filters, force controls, display options and camera position persist between graph sessions.
-- Data warnings identify duplicate names, unknown roles and multiple notes marked `is_self`.
-- Export the current view as a PNG image.
-- Bases integration: the graph is available as a view type inside Bases, where the base's own filters decide who appears on the map.
-- Light, dark and community themes are supported. All colors are read from Obsidian's CSS variables.
-- Russian and English interface, detected automatically from Obsidian's language.
+- Detect people by a configurable tag and frontmatter fields.
+- Show photos, names, companies, roles, relationship lines, and potential contacts.
+- Place people by role and attract people from the same company toward one another.
+- Organize people into transparent, overlapping layers with custom names, identifiers, colors, and Obsidian icons.
+- Configure independent layer sets for the standalone graph and each Bases view.
+- Search and filter by role or company directly on the graph.
+- Adjust node size, line width, and graph physics. Filters, physics, display settings, and camera position are saved automatically.
+- Pan, zoom, drag nodes, fit the graph to the window, and export the current view to PNG.
+- Frame portraits non-destructively with drag and zoom controls.
+- Warn about duplicate names, unknown roles, and multiple notes marked `is_self`.
+- Create notes for potential contacts from a configurable folder and template.
+- Use Russian or English automatically, following the Obsidian interface language.
+
+The force simulation and drawing loop stop after the layout settles, so an idle graph does not keep using CPU.
 
 ## Installation
 
-Install **Person Network** from **Settings → Community plugins → Browse** in Obsidian.
+Install **Person Network** from **Settings → Community plugins → Browse**.
 
-### Manual
+For manual installation:
 
-1. Download `main.js`, `manifest.json` and `styles.css` from the latest release.
-2. Create a folder named `person-network` inside your vault at `.obsidian/plugins/`.
-3. Place the three files in that folder.
-4. Open Settings, go to Community plugins, and enable Person Network.
+1. Download `main.js`, `manifest.json`, and `styles.css` from the latest GitHub release.
+2. Create `.obsidian/plugins/person-network/` inside your vault.
+3. Copy the three files into that folder.
+4. Enable Person Network under Community plugins.
 
-## Getting started
+## Quick start
 
-Create a note for a person and add frontmatter with the detection tag:
+Create one note per person and add frontmatter like this:
 
 ```yaml
 ---
@@ -51,71 +48,80 @@ company: Acme Corp
 relation: friend
 potential_contacts:
   - John Smith
-  - Kyle Reese
+  - "[[People/Kyle Reese|Kyle Reese]]"
+layers:
+  - work
+  - close-circle
 ---
 ```
 
-Open the graph from the ribbon icon or the command palette command "Open person network". The note tagged `person` becomes a node. To mark yourself as the center, add `is_self: true` to your own note.
+Open the graph from the ribbon or run **Open person network** from the command palette. Add `is_self: true` to your own note to use it as the center node.
 
-![alt text](image/frontmatter.gif)
+![Person frontmatter](image/frontmatter.gif)
 
-## Frontmatter reference
+## Frontmatter
 
-| Field | Type | Description |
+| Property | Type | Purpose |
 | --- | --- | --- |
-| detection tag | tag | Marks a note as a person. Default tag is `person`, configurable in settings. |
-| `name` | text | Display name. Falls back to the file name. |
-| `photo` | text | Vault-relative path to a photo. |
-| `relation` | text | The role name. Its ring style and position come from the Roles list. |
-| `company` | text | Used by the company filter and shown under the node. |
-| potential contacts | list | Names of contacts. A name with its own note becomes a connection; a name without one becomes a ghost node. |
-| `is_self` | boolean | Marks the note as you. That node becomes the center. |
+| recognition tag | tag | Includes the note in Person Network. Default: `person`. |
+| `name` | text | Display name. The file name is used when this is empty. |
+| `photo` | text | Vault-relative path to an image. |
+| `relation` | text | Selects a role configured in plugin settings. |
+| `company` | text | Displays the company, enables company filtering, and applies company attraction. |
+| `potential_contacts` | list | Names or wikilinks. Existing people become connections; missing people become potential-contact nodes. |
+| `layers` | list | Layer identifiers assigned to this person, such as `[work, family]`. |
+| `is_self` | boolean | Makes this person the center node. |
 
-All field names except `is_self` and `company` are configurable in settings.
+The recognition tag and the `name`, `photo`, `relation`, `potential_contacts`, and `layers` property names are configurable. `company` and `is_self` are fixed.
 
 ## Roles
 
-A role ties together how a person looks and where they sit. Each role has a color, a ring stroke style and a position score from 1 to 10, where 10 is closest to the center. The `relation` value in a note selects its role. Any note whose relation does not match a defined role uses the default role.
+A role controls a person's ring and radial position. Each role has a ring color, a solid/dashed/dotted style, and a position score from 1 to 10. A higher score places the person closer to the center. The value of the relation property must match the role name. Unmatched values use the default role and produce a warning.
 
-![alt text](image/settings-roles.gif)
+![Role settings](image/settings-roles.gif)
 
-## In-graph control panel
+## Layers
 
-The panel opens from the gear icon in the top corner of the graph and mirrors the structure of the core Graph view.
+Layers visually group people without changing graph physics. Create a layer in **Settings → Person Network → Layers**, give it a unique identifier, then add that identifier to the shared layer property in person notes:
 
-- Filters: a search box that highlights and dims, plus toggles for each relation type and company.
-- Display: toggles for connection lines and potential contacts, plus sliders for node size and line thickness.
-- Forces: sliders for repel force, link force, link distance and center force.
+```yaml
+layers:
+  - family
+  - project-alpha
+```
 
-A wand icon replays the appearance animation, and a reset icon restores the panel's controls to their defaults.
+Each layer has a name, identifier, color, Obsidian icon, priority, label visibility, and icon visibility. A layer with at least two visible people is drawn as a translucent rounded area. Areas can overlap, and priority controls their drawing order.
 
-The panel state and camera position are saved automatically.
+The layer button on the graph opens a compact panel. The eye button hides only the area; the person button hides the layer members. Right-click a person to add or remove them from a layer. This updates the shared frontmatter list.
 
-![alt text](image/control-panel.gif)
+Layer definitions are independent for the standalone graph and each Bases view. Choose the target with **View** in the Layers settings. Membership always comes from the same shared frontmatter property.
 
-## Potential contacts
+## Graph controls
 
-List a person's contacts in the contacts field. If a name matches another person note, a connection line is drawn between them. If a name has no note yet, it appears as a muted, dashed ghost node. Clicking a ghost opens a prompt to create its note, using the configured folder and template.
+Open the control panel with the gear button:
 
-Contacts may also use wikilinks such as `[[People/Jane Doe|Jane]]`; Person Network resolves the note path before falling back to display-name matching.
+- **Filters** — search people and filter by role or company.
+- **Display** — show or hide relationship lines and potential contacts; change node size and line thickness.
+- **Forces** — change link distance, repulsion, link strength, center attraction, and company attraction.
+
+The wand button replays the appearance animation. Double-click empty graph space to fit visible nodes into the window. Controls and camera position are stored automatically.
+
+![Graph controls](image/control-panel.gif)
+
+## Contacts and connections
+
+Add names or wikilinks to the contacts property. Person Network resolves note paths and aliases before matching display names. A matching person becomes a connection. A missing person becomes a potential-contact node; click it to create a note using the configured folder and template.
 
 ## Photo framing
 
-Right-click a person with a photo and select **Edit photo crop**. Drag the image inside the square and adjust the zoom, then save the display area. The source image is never modified and no duplicate image is created. Framing values are stored in the plugin's local `data.json` and are keyed by note path.
+Right-click a person and choose **Edit photo crop**. Drag the image inside the square, adjust zoom, and save. Person Network stores only framing values in its local `data.json`; it does not modify or duplicate the image. The editor also works for the central `is_self` person.
 
 ## Bases integration
 
-When the Bases core plugin is enabled, Person Network registers a graph view type that can be selected inside any base. The base's filters decide which notes appear on the map, and per-view options in the Bases toolbar map the name, photo, relation and contacts properties. This can be turned off in settings.
+With the Bases core plugin enabled, select **Person Network** as a Bases view. Base filters determine which notes appear, while view options map the name, photo, relation, and contacts properties. Each Bases view has its own layer definitions. Bases integration can be disabled in settings and requires a plugin or Obsidian reload to apply.
 
-![alt text](image/bases-view.gif)
-
-## Settings
-
-- Person detection: the recognition tag and the field names for name, photo, relation and contacts, plus paths to exclude.
-- Roles: add, edit and remove roles, and set the default role.
-- General: the center node label and the Bases integration toggle.
-- New notes: the folder and template note used when creating a note from a ghost.
+![Person Network in Bases](image/bases-view.gif)
 
 ## Privacy
 
-Person Network works entirely inside your vault. It does not make network requests, require an account, display ads or collect telemetry.
+Person Network works locally inside your vault. It makes no network requests, requires no account, displays no ads, and collects no telemetry.

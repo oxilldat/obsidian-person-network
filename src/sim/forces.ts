@@ -95,6 +95,28 @@ export function applyRadialPositionForce(
 	}
 }
 
+/** Softly pulls people sharing a company toward that company's moving centroid. */
+export function applyCompanyForce(nodes: SimNode[], alpha: number, strength: number): void {
+	if (strength <= 0) return;
+	const groups = new Map<string, { x: number; y: number; count: number }>();
+	for (const node of nodes) {
+		const company = node.company?.trim();
+		if (!company || company === "-") continue;
+		const group = groups.get(company) ?? { x: 0, y: 0, count: 0 };
+		group.x += node.x;
+		group.y += node.y;
+		group.count += 1;
+		groups.set(company, group);
+	}
+	for (const node of nodes) {
+		if (node.fx !== null || !node.company) continue;
+		const group = groups.get(node.company.trim());
+		if (!group || group.count < 2) continue;
+		node.vx += (group.x / group.count - node.x) * strength * alpha;
+		node.vy += (group.y / group.count - node.y) * strength * alpha;
+	}
+}
+
 /** Keeps node circles (and their labels) from overlapping, so text stays legible. */
 export function applyCollisionForce(
 	nodes: SimNode[],

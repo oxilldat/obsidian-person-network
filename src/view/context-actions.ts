@@ -1,8 +1,9 @@
 import { Menu, Modal, Notice, type App } from "obsidian";
-import type { GhostNode, PersonNode, PluginSettings } from "../data/types";
+import type { GhostNode, GraphLayer, PersonNode, PluginSettings } from "../data/types";
 import { createNoteForGhostName } from "../ghost/ghost-note-creator";
 import { t } from "../i18n";
 import { openPhotoCropEditor } from "../photo/crop-photo";
+import { readLayerIdentifiers } from "../layers/membership";
 
 class ConfirmCreateNoteModal extends Modal {
 	constructor(
@@ -40,6 +41,7 @@ export function showNodeContextMenu(
 	person: PersonNode,
 	event: MouseEvent,
 	onSettingsChanged: () => Promise<void>,
+	layers: GraphLayer[] = [],
 ): void {
 	const menu = new Menu();
 	menu.addItem((item) => item.setTitle(t("photo.cropSquare")).setIcon("crop").setDisabled(!person.photoPath).onClick(() => {
@@ -52,6 +54,28 @@ export function showNodeContextMenu(
 			new Notice(t("photo.cropSuccess"));
 		});
 	}));
+	if (layers.length > 0) {
+		menu.addSeparator();
+		menu.addItem((item) => item.setTitle(t("layers.assignHeading")).setIsLabel(true));
+		for (const layer of [...layers].sort((a, b) => b.priority - a.priority)) {
+			const frontmatter = app.metadataCache.getFileCache(person.file)?.frontmatter;
+			const assigned = readLayerIdentifiers(frontmatter?.[settings.layerField]).includes(layer.identifier);
+			menu.addItem((item) => item
+				.setTitle(layer.name)
+				.setIcon(layer.icon || "layers")
+				.setChecked(assigned)
+				.onClick(() => {
+					void app.fileManager.processFrontMatter(person.file, (fm) => {
+						const identifiers = readLayerIdentifiers(fm[settings.layerField]);
+						const next = assigned
+							? identifiers.filter((identifier) => identifier !== layer.identifier)
+							: [...new Set([...identifiers, layer.identifier])];
+						if (next.length > 0) fm[settings.layerField] = next;
+						else delete fm[settings.layerField];
+					}).then(onSettingsChanged);
+				}));
+		}
+	}
 	menu.showAtMouseEvent(event);
 }
 

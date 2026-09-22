@@ -5,8 +5,11 @@ import { CENTER_NODE_ID, CanvasRenderer } from "../render/canvas-renderer";
 import { ghostTooltipLines, personTooltipLines, wireGraphInteraction } from "../view/graph-interaction";
 import { showNodeContextMenu } from "../view/context-actions";
 import { Tooltip } from "../view/tooltip";
+import { LayerPanel } from "../view/layer-panel";
 import { adaptEntries, type BasesFieldMapping } from "./entry-adapter";
 import { OPTION_KEYS } from "./options";
+import { t } from "../i18n";
+import { resolveLayerMembers } from "../layers/membership";
 
 export const BASES_VIEW_TYPE = "person-network";
 
@@ -24,6 +27,9 @@ export class PersonNetworkBasesView extends BasesView {
 	private readonly rootEl: HTMLElement;
 	private renderer: CanvasRenderer | null = null;
 	private tooltip: Tooltip | null = null;
+	private layerPanel: LayerPanel | null = null;
+	private layerScopeId = "";
+	private unregisterSettingsListener: (() => void) | null = null;
 
 	private peopleById = new Map<string, PersonNode>();
 	private ghostsById = new Map<string, GhostNode>();
@@ -36,13 +42,23 @@ export class PersonNetworkBasesView extends BasesView {
 
 	override onload(): void {
 		this.ensureUi();
+		this.unregisterSettingsListener = this.plugin.registerSettingsListener(() => {
+			const scope = this.plugin.getLayerScope(this.layerScopeId, this.config.name || t("bases.viewName"));
+			this.renderer?.setLayers(scope.layers);
+			this.layerPanel?.update(scope.layers);
+			this.onDataUpdated();
+		});
 	}
 
 	override onunload(): void {
 		this.renderer?.destroy();
 		this.tooltip?.destroy();
+		this.layerPanel?.destroy();
+		this.unregisterSettingsListener?.();
+		this.unregisterSettingsListener = null;
 		this.renderer = null;
 		this.tooltip = null;
+		this.layerPanel = null;
 		this.rootEl.remove();
 	}
 
@@ -52,6 +68,8 @@ export class PersonNetworkBasesView extends BasesView {
 		const snapshot = adaptEntries(this.app, this.data.data, this.readMapping(), this.plugin.settings);
 		this.peopleById = new Map(snapshot.people.map((person) => [person.id, person]));
 		this.ghostsById = new Map(snapshot.ghosts.map((ghost) => [ghost.id, ghost]));
+		const layerScope = this.plugin.getLayerScope(this.readLayerScopeId(), this.config.name || t("bases.viewName"));
+		renderer.setLayers(layerScope.layers, resolveLayerMembers(this.app, snapshot.people, layerScope.layers, this.plugin.settings.layerField));
 
 		renderer.filter = {
 			search: "",
@@ -74,6 +92,13 @@ export class PersonNetworkBasesView extends BasesView {
 
 		this.renderer = new CanvasRenderer(this.rootEl, this.app, () => this.plugin.settings);
 		this.tooltip = new Tooltip(this.rootEl);
+		this.layerScopeId = this.readLayerScopeId();
+		const layerScope = this.plugin.getLayerScope(this.layerScopeId, this.config.name || t("bases.viewName"));
+		this.renderer.setLayers(layerScope.layers);
+		this.layerPanel = new LayerPanel(this.rootEl, layerScope.layers, () => {
+			this.renderer?.setLayers(layerScope.layers);
+			void this.plugin.saveGraphState();
+		});
 
 		wireGraphInteraction(this, this.renderer, this.tooltip, {
 			onNodeClick: (id) => this.handleClick(id),
@@ -83,8 +108,10 @@ export class PersonNetworkBasesView extends BasesView {
 					: this.peopleById.get(id);
 				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
 					await this.plugin.saveSettings();
+					this.renderer?.setLayers(layerScope.layers);
+					this.layerPanel?.update(layerScope.layers);
 					this.onDataUpdated();
-				});
+				}, layerScope.layers);
 			},
 			getTooltipLines: (id) => {
 				const person = this.peopleById.get(id);
@@ -103,6 +130,15 @@ export class PersonNetworkBasesView extends BasesView {
 		);
 
 		return this.renderer;
+	}
+
+	private readLayerScopeId(): string {
+		const key = "personNetworkLayerScopeId";
+		const existing = this.config.get(key);
+		if (typeof existing === "string" && existing.length > 0) return existing;
+		const id = `base:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 9)}`;
+		this.config.set(key, id);
+		return id;
 	}
 
 	private handleClick(id: string): void {

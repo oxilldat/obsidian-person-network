@@ -25,6 +25,11 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 		search: "", relationTypes: null, companies: null, showEdges: true, showGhosts: true,
 		nodeScale: 1, edgeWidth: 1.4,
 		linkDistance: 110, repulsionStrength: 2200, linkStrength: 0.5, centerStrength: 0.05,
+		companyStrength: 0.04,
 	},
 	photoCrops: {},
+	layerField: "layers",
+	layerScopes: {
+		standalone: { id: "standalone", label: "Person Network", layers: [] },
+	},
 };

@@ -1,6 +1,7 @@
 import { easeInCubic } from "../utils/geometry";
 import {
 	applyCenterForce,
+	applyCompanyForce,
 	applyCollisionForce,
 	applyLinkForce,
 	applyRadialPositionForce,
@@ -25,6 +26,7 @@ export interface SimulationConfig {
 	repulsionStrength: number;
 	linkStrength: number;
 	centerStrength: number;
+	companyStrength: number;
 }
 
 const DEFAULT_CONFIG: SimulationConfig = {
@@ -32,6 +34,7 @@ const DEFAULT_CONFIG: SimulationConfig = {
 	repulsionStrength: 2200,
 	linkStrength: 0.5,
 	centerStrength: 0.05,
+	companyStrength: 0.04,
 };
 
 /**
@@ -98,6 +101,7 @@ export class Simulation {
 		applyRepulsionForce(this.nodes, this.grid, this.config.repulsionStrength, this.alpha);
 		applyLinkForce(this.links, this.config.linkDistance, this.alpha, this.config.linkStrength);
 		applyCenterForce(this.nodes, this.centerX, this.centerY, this.alpha, this.config.centerStrength);
+		applyCompanyForce(this.nodes, this.alpha, this.config.companyStrength);
 		applyRadialPositionForce(this.nodes, this.centerX, this.centerY, this.alpha);
 		applyCollisionForce(this.nodes, this.grid, this.alpha);
 

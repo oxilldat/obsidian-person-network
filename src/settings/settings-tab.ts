@@ -1,5 +1,5 @@
-import { App, Modal, Notice, PluginSettingTab, Setting } from "obsidian";
-import type { PluginSettings, RingStyle } from "../data/types";
+import { App, Modal, Notice, PluginSettingTab, Setting, getIconIds, setIcon } from "obsidian";
+import type { GraphLayer, PluginSettings, RingStyle } from "../data/types";
 import { t, type TranslationKey } from "../i18n";
 import type PersonNetworkPlugin from "../main";
 import { DEFAULT_SETTINGS } from "./defaults";
@@ -42,6 +42,9 @@ class ConfirmResetRolesModal extends Modal {
 
 export class PersonNetworkSettingTab extends PluginSettingTab {
 	private readonly plugin: PersonNetworkPlugin;
+	private selectedLayerScopeId: string | null = null;
+	private readonly expandedLayers = new Set<string>();
+	private closeIconPicker: (() => void) | null = null;
 
 	constructor(app: App, plugin: PersonNetworkPlugin) {
 		super(app, plugin);
@@ -50,11 +53,13 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
+		this.closeIconPicker?.();
 		containerEl.empty();
 
 		this.renderGeneralSection(containerEl);
 		this.renderNewNoteSection(containerEl);
 		this.renderRolesSection(containerEl);
+		this.renderLayersSection(containerEl);
 		this.renderPersonDetectionSection(containerEl);
 		this.renderAuthorCard(containerEl);
 	}
@@ -95,6 +100,67 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 
 	private async save(): Promise<void> {
 		await this.plugin.saveSettings();
+	}
+
+	private redisplayPreservingScroll(): void {
+		const positions: Array<{ element: HTMLElement; top: number }> = [];
+		let element: HTMLElement | null = this.containerEl;
+		while (element) {
+			if (element.scrollHeight > element.clientHeight) positions.push({ element, top: element.scrollTop });
+			element = element.parentElement;
+		}
+		this.display();
+		const restore = (): void => positions.forEach(({ element: target, top }) => { target.scrollTop = top; });
+		restore();
+		window.requestAnimationFrame(restore);
+	}
+
+	private openIconPicker(anchor: HTMLElement, current: string, onChoose: (icon: string) => void): void {
+		this.closeIconPicker?.();
+		const popup = document.body.createDiv({ cls: "person-network-icon-picker" });
+		const search = popup.createEl("input", {
+			cls: "person-network-icon-picker-search",
+			attr: { type: "search", placeholder: t("settings.layer.iconPlaceholder") },
+		});
+		const grid = popup.createDiv({ cls: "person-network-icon-picker-grid" });
+		const footer = popup.createDiv({ cls: "person-network-icon-picker-footer" });
+		const icons = getIconIds();
+		const render = (): void => {
+			const query = search.value.trim().toLowerCase();
+			const matches = icons.filter((name) => !query || name.toLowerCase().includes(query));
+			const visible = matches.slice(0, 240);
+			grid.empty();
+			for (const name of visible) {
+				const button = grid.createEl("button", {
+					cls: `person-network-icon-picker-item${name === current ? " is-selected" : ""}`,
+					attr: { type: "button", title: name, "aria-label": name },
+				});
+				setIcon(button, name);
+				button.addEventListener("click", () => { onChoose(name); close(); });
+			}
+			footer.setText(t("settings.layer.iconCount", { shown: String(visible.length), total: String(matches.length) }));
+		};
+		const rect = anchor.getBoundingClientRect();
+		popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 400))}px`;
+		popup.style.top = `${Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 490))}px`;
+		const close = (): void => {
+			document.removeEventListener("pointerdown", outside, true);
+			document.removeEventListener("keydown", escape);
+			popup.remove();
+			if (this.closeIconPicker === close) this.closeIconPicker = null;
+		};
+		const outside = (event: PointerEvent): void => {
+			if (!popup.contains(event.target as Node) && !anchor.contains(event.target as Node)) close();
+		};
+		const escape = (event: KeyboardEvent): void => { if (event.key === "Escape") close(); };
+		this.closeIconPicker = close;
+		search.addEventListener("input", render);
+		render();
+		window.setTimeout(() => {
+			document.addEventListener("pointerdown", outside, true);
+			document.addEventListener("keydown", escape);
+			search.focus();
+		}, 0);
 	}
 
 	private resetRolesToDefaults(): void {
@@ -315,7 +381,7 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 				});
 			});
 
-		type PlainStringKey = "nameField" | "photoField" | "relationField" | "potentialContactsField" | "excludePaths";
+		type PlainStringKey = "nameField" | "photoField" | "relationField" | "potentialContactsField" | "layerField" | "excludePaths";
 		type StringSettingKey = {
 			[K in PlainStringKey]: PluginSettings[K] extends string ? K : never;
 		}[PlainStringKey];
@@ -329,6 +395,7 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 				"settings.potentialContactsField.name",
 				"settings.potentialContactsField.desc",
 			],
+			["layerField", "settings.layerField.name", "settings.layerField.desc"],
 			["excludePaths", "settings.excludePaths.name", "settings.excludePaths.desc"],
 		];
 
@@ -343,5 +410,114 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 					}),
 				);
 		}
+	}
+
+	private renderLayersSection(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName(t("settings.layersHeading")).setHeading().setDesc(t("settings.layersDesc"));
+		const scopes = Object.values(this.plugin.settings.layerScopes ?? {});
+		if (scopes.length === 0) return;
+		this.selectedLayerScopeId = scopes.some((scope) => scope.id === this.selectedLayerScopeId)
+			? this.selectedLayerScopeId : scopes[0].id;
+		const scope = scopes.find((candidate) => candidate.id === this.selectedLayerScopeId) ?? scopes[0];
+		const commonGroup = containerEl.createDiv({ cls: "person-network-settings-group person-network-layer-add" });
+		if (scopes.length > 1) {
+			new Setting(commonGroup).setName(t("settings.layer.scope")).setDesc(t("settings.layer.scopeDesc")).addDropdown((dropdown) => {
+				for (const candidate of scopes) dropdown.addOption(candidate.id, candidate.label);
+				dropdown.setValue(scope.id).onChange((value) => { this.selectedLayerScopeId = value; this.redisplayPreservingScroll(); });
+			});
+		}
+
+		let newName = "";
+		let newIdentifier = "";
+		new Setting(commonGroup)
+			.addText((text) => text.setPlaceholder(t("settings.layer.namePlaceholder")).onChange((value) => { newName = value.trim(); }))
+			.addText((text) => text.setPlaceholder(t("settings.layer.identifierPlaceholder")).onChange((value) => { newIdentifier = value.trim(); }))
+			.addButton((button) => button.setButtonText(t("settings.layer.add")).setCta().onClick(async () => {
+				if (!newName || !newIdentifier || scope.layers.some((layer) => layer.identifier === newIdentifier)) return;
+				const layer: GraphLayer = {
+					id: `layer:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`,
+					name: newName, identifier: newIdentifier, icon: "users", color: "#7b6cd9",
+					priority: scope.layers.length, showLabel: true, showIcon: true, showArea: true, showMembers: true,
+				};
+				scope.layers.push(layer);
+				this.expandedLayers.add(layer.id);
+				await this.save();
+				this.redisplayPreservingScroll();
+			}));
+
+		for (const layer of [...scope.layers].sort((a, b) => b.priority - a.priority)) {
+			const layerGroup = containerEl.createDiv({ cls: "person-network-settings-group person-network-layer-settings" });
+			this.renderLayerEditor(layerGroup, scope.layers, layer);
+		}
+	}
+
+	private renderLayerEditor(card: HTMLElement, layers: GraphLayer[], layer: GraphLayer): void {
+		const expanded = this.expandedLayers.has(layer.id);
+		card.toggleClass("is-expanded", expanded);
+		const header = card.createDiv({ cls: "person-network-layer-settings-header" });
+		const chevron = header.createSpan({ cls: "person-network-layer-chevron" });
+		setIcon(chevron, "chevron-right");
+		const icon = header.createSpan({ cls: "person-network-layer-header-icon" });
+		setIcon(icon, layer.icon || "layers");
+		const title = header.createDiv({ cls: "person-network-layer-header-title" });
+		const headerName = title.createDiv({ cls: "person-network-layer-header-name", text: layer.name });
+		title.createDiv({ cls: "person-network-layer-header-id", text: layer.identifier });
+		const color = header.createSpan({ cls: "person-network-layer-color" });
+		color.style.backgroundColor = layer.color;
+		header.addEventListener("click", () => {
+			const isExpanded = card.hasClass("is-expanded");
+			if (isExpanded) this.expandedLayers.delete(layer.id); else this.expandedLayers.add(layer.id);
+			card.toggleClass("is-expanded", !isExpanded);
+		});
+		const body = card.createDiv({ cls: "person-network-layer-settings-body" });
+		const nameRow = new Setting(body).setName(t("settings.layer.name"));
+		nameRow.addText((text) => text.setValue(layer.name).onChange(async (value) => {
+			layer.name = value.trim() || t("settings.layer.defaultName");
+			headerName.setText(layer.name);
+			await this.save();
+		}));
+		nameRow.addColorPicker((picker) => picker.setValue(toHex(layer.color, "#7b6cd9")).onChange(async (value) => {
+			layer.color = value;
+			color.style.backgroundColor = value;
+			await this.save();
+		}));
+		nameRow.addExtraButton((button) => button.setIcon("arrow-up").setTooltip(t("settings.layer.raise")).onClick(async () => {
+			layer.priority += 1;
+			await this.save();
+			this.redisplayPreservingScroll();
+		}));
+		nameRow.addExtraButton((button) => button.setIcon("arrow-down").setTooltip(t("settings.layer.lower")).onClick(async () => {
+			layer.priority -= 1;
+			await this.save();
+			this.redisplayPreservingScroll();
+		}));
+		nameRow.addExtraButton((button) => button.setIcon("trash").setTooltip(t("common.remove")).onClick(async () => {
+			layers.splice(layers.indexOf(layer), 1);
+			await this.save();
+			this.redisplayPreservingScroll();
+		}));
+
+		new Setting(body).setName(t("settings.layer.identifier")).addText((text) => text
+			.setValue(layer.identifier).onChange(async (value) => {
+				const identifier = value.trim();
+				if (!identifier || layers.some((candidate) => candidate !== layer && candidate.identifier === identifier)) return;
+				layer.identifier = identifier;
+				await this.save();
+			}));
+
+		new Setting(body).setName(t("settings.layer.icon")).addButton((button) => {
+			button.setIcon(layer.icon || "layers").setButtonText(layer.icon || "layers");
+			button.onClick(() => this.openIconPicker(button.buttonEl, layer.icon || "layers", (selected) => {
+				layer.icon = selected;
+				button.setIcon(selected).setButtonText(selected);
+				setIcon(icon, selected);
+				void this.save();
+			}));
+		});
+
+		new Setting(body).setName(t("settings.layer.showLabel")).addToggle((toggle) => toggle
+			.setValue(layer.showLabel).onChange(async (value) => { layer.showLabel = value; await this.save(); }));
+		new Setting(body).setName(t("settings.layer.showIcon")).addToggle((toggle) => toggle
+			.setValue(layer.showIcon).onChange(async (value) => { layer.showIcon = value; await this.save(); }));
 	}
 }
