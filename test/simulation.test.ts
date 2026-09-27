@@ -73,9 +73,13 @@ describe("Simulation", () => {
 		const second = node("second", 0, 0, { layerIds: ["b"] });
 		const outsider = node("outsider", 0, 0);
 		expect(arrangeGroupCircles([first, shared, second, outsider])).toBe(true);
-		expect(first.x).toBeLessThan(shared.x);
-		expect(second.x).toBeGreaterThan(shared.x);
-		expect(Math.hypot(outsider.x, outsider.y)).toBeGreaterThan(Math.abs(first.x));
+		const circles = calculateGroupCircles([first, shared, second, outsider]);
+		for (const circle of circles) {
+			const sharedDistance = Math.hypot(shared.x - circle.x, shared.y - circle.y);
+			const outsiderDistance = Math.hypot(outsider.x - circle.x, outsider.y - circle.y);
+			expect(sharedDistance).toBeLessThanOrEqual(circle.radius - shared.radius - 18 + 0.001);
+			expect(outsiderDistance).toBeGreaterThanOrEqual(circle.radius + outsider.radius + 18 - 0.001);
+		}
 	});
 
 	it("uses fixed forces in spatial mode", () => {
