@@ -1,4 +1,4 @@
-import { Notice, setIcon } from "obsidian";
+import { setIcon } from "obsidian";
 import type { GraphLayer } from "../data/types";
 import { t } from "../i18n";
 
@@ -49,11 +49,7 @@ export class LayerPanel {
 	}
 
 	setVisible(visible: boolean): void {
-		if (visible) {
-			const active = [...this.layers].filter((layer) => layer.showArea).sort((a, b) => b.priority - a.priority);
-			for (const layer of active.slice(2)) layer.showArea = false;
-			this.render();
-		}
+		if (visible) this.render();
 		this.rootEl.toggleClass("is-hidden", !visible);
 		if (!visible) this.setOpen(false);
 	}
@@ -73,12 +69,7 @@ export class LayerPanel {
 			const row = this.listEl.createDiv({ cls: "person-network-layer-row" });
 			row.createSpan({ cls: "person-network-layer-row-name", text: layer.name });
 			this.addToggle(row, layer.showArea ? "eye" : "eye-off", t("layers.toggleArea"), layer.showArea, (value) => {
-				if (value && this.layers.filter((candidate) => candidate.showArea).length >= 2) {
-					new Notice(t("layers.limitNotice"));
-					return false;
-				}
 				layer.showArea = value;
-				return true;
 			});
 			this.addToggle(row, layer.showMembers ? "user" : "user-x", t("layers.toggleMembers"), layer.showMembers, (value) => {
 				layer.showMembers = value;

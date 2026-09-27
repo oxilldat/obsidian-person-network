@@ -436,7 +436,7 @@ export class CanvasRenderer {
 			if (meta.personId) metaByPerson.set(meta.personId, meta);
 		}
 		const activeLayers = this.getSettings().layoutModel === "spatial"
-			? [...this.layers].filter((layer) => layer.showArea).sort((a, b) => b.priority - a.priority).slice(0, 2)
+			? [...this.layers].filter((layer) => layer.showArea).sort((a, b) => b.priority - a.priority)
 			: [];
 		for (const layer of activeLayers) {
 			const visibleMembers = (this.layerMembers[layer.id] ?? []).filter((personId) => {
@@ -824,7 +824,7 @@ export class CanvasRenderer {
 		if (this.getSettings().layoutModel !== "spatial") return;
 		const geometry = new Map(this.simulation.groupCircles.map((circle) => [circle.id, circle]));
 		const ordered = [...this.layers].filter((layer) => layer.showArea)
-			.sort((a, b) => b.priority - a.priority).slice(0, 2).reverse();
+			.sort((a, b) => b.priority - a.priority).reverse();
 		for (const layer of ordered) {
 			if (!layer.showArea) continue;
 			const memberSet = new Set(this.layerMembers[layer.id] ?? []);

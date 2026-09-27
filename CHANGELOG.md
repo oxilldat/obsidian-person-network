@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.2
+
+- Removed the two-group display limit from the spatial graph.
+- Generalized circle placement, intersections and membership constraints for any number of visible groups.
+
 ## 1.3.1
 
 - Fixed Obsidian review errors by using native setting headings and CSS classes for cursor state.

@@ -39,25 +39,44 @@ function capacityRadius(count: number): number {
 
 /** Stable circle geometry shared by rendering and physical constraints. */
 export function calculateGroupCircles(nodes: SimNode[], structure = buildGroupStructure(nodes)): GroupCircle[] {
-	const ids = structure.ids.slice(0, 2);
+	const ids = structure.ids;
 	if (ids.length === 0) return [];
-	const counts = ids.map((id) => structure.membersById.get(id)?.length ?? 0);
-	const firstRadius = capacityRadius(counts[0]);
-	if (ids.length === 1) return [{ id: ids[0], x: 0, y: 0, radius: firstRadius }];
+	const radii = ids.map((id) => capacityRadius(structure.membersById.get(id)?.length ?? 0));
+	if (ids.length === 1) return [{ id: ids[0], x: 0, y: 0, radius: radii[0] }];
 
-	const secondRadius = capacityRadius(counts[1]);
-	let sharedCount = 0;
-	for (const node of structure.membersById.get(ids[0]) ?? []) {
-		if (node.layerIds?.includes(ids[1])) sharedCount += 1;
+	const layoutRadius = Math.max(...radii) * Math.max(1.15, ids.length / Math.PI);
+	const circles = ids.map((id, index) => {
+		const angle = -Math.PI / 2 + index * Math.PI * 2 / ids.length;
+		return { id, x: Math.cos(angle) * layoutRadius, y: Math.sin(angle) * layoutRadius, radius: radii[index] };
+	});
+	// Pull circles with shared members together and keep unrelated groups apart.
+	for (let pass = 0; pass < 18; pass++) {
+		for (let firstIndex = 0; firstIndex < circles.length; firstIndex++) {
+			for (let secondIndex = firstIndex + 1; secondIndex < circles.length; secondIndex++) {
+				const first = circles[firstIndex];
+				const second = circles[secondIndex];
+				let shared = 0;
+				for (const node of structure.membersById.get(first.id) ?? []) {
+					if (node.layerIds?.includes(second.id)) shared += 1;
+				}
+				const overlap = shared > 0
+					? Math.min(Math.min(first.radius, second.radius) * 1.35, 125 + Math.sqrt(shared) * 72)
+					: -72;
+				const desired = first.radius + second.radius - overlap;
+				const dx = second.x - first.x;
+				const dy = second.y - first.y;
+				const distance = Math.hypot(dx, dy) || 1;
+				const correction = (distance - desired) * 0.12;
+				const unitX = dx / distance;
+				const unitY = dy / distance;
+				first.x += unitX * correction / 2;
+				first.y += unitY * correction / 2;
+				second.x -= unitX * correction / 2;
+				second.y -= unitY * correction / 2;
+			}
+		}
 	}
-	const overlapDepth = sharedCount === 0
-		? -72
-		: Math.min(Math.min(firstRadius, secondRadius) * 1.35, 125 + Math.sqrt(sharedCount) * 72);
-	const distance = firstRadius + secondRadius - overlapDepth;
-	return [
-		{ id: ids[0], x: -distance / 2, y: 0, radius: firstRadius },
-		{ id: ids[1], x: distance / 2, y: 0, radius: secondRadius },
-	];
+	return circles;
 }
 
 function moveToward(current: number, target: number, factor: number, limit: number): number {
@@ -95,24 +114,25 @@ export function updateDynamicGroupCircles(nodes: SimNode[], current: GroupCircle
 		};
 	});
 
-	if (next.length === 2) {
-		const [first, second] = next;
-		let shared = 0;
-		for (const node of structure.membersById.get(first.id) ?? []) {
-			if (node.layerIds?.includes(second.id)) shared += 1;
+	for (let firstIndex = 0; firstIndex < next.length; firstIndex++) {
+		for (let secondIndex = firstIndex + 1; secondIndex < next.length; secondIndex++) {
+			const first = next[firstIndex];
+			const second = next[secondIndex];
+			let shared = 0;
+			for (const node of structure.membersById.get(first.id) ?? []) {
+				if (node.layerIds?.includes(second.id)) shared += 1;
+			}
+			const dx = second.x - first.x;
+			const dy = second.y - first.y;
+			const distance = Math.hypot(dx, dy) || 1;
+			const desiredOverlap = shared > 0 ? 110 + Math.sqrt(shared) * 50 : -60;
+			const desiredDistance = first.radius + second.radius - desiredOverlap;
+			const correction = Math.max(-2, Math.min(2, (distance - desiredDistance) * 0.035));
+			first.x += dx / distance * correction;
+			first.y += dy / distance * correction;
+			second.x -= dx / distance * correction;
+			second.y -= dy / distance * correction;
 		}
-		const dx = second.x - first.x;
-		const dy = second.y - first.y;
-		const distance = Math.hypot(dx, dy) || 1;
-		const unitX = dx / distance;
-		const unitY = dy / distance;
-		const desiredOverlap = shared > 0 ? 110 + Math.sqrt(shared) * 50 : -60;
-		const desiredDistance = first.radius + second.radius - desiredOverlap;
-		const correction = Math.max(-4, Math.min(4, (distance - desiredDistance) * 0.06));
-		first.x += unitX * correction;
-		first.y += unitY * correction;
-		second.x -= unitX * correction;
-		second.y -= unitY * correction;
 	}
 	return next;
 }
@@ -230,9 +250,8 @@ export function constrainNodesToGroupCircles(nodes: SimNode[], circles = calcula
 	for (const node of nodes) {
 		if (node.fx !== null || node.isCenter) continue;
 		let corrected = false;
-		// Alternating projections converge for the two-circle intersection and
-		// for the inside-one/outside-the-other crescent.
-		for (let pass = 0; pass < 6; pass++) {
+		// Alternating projections converge on intersections of any number of circles.
+		for (let pass = 0; pass < Math.max(6, circles.length * 3); pass++) {
 			for (const circle of circles) {
 				const belongs = node.layerIds?.includes(circle.id) ?? false;
 				const dx = node.x - circle.x;
@@ -287,16 +306,25 @@ export function arrangeGroupCircles(nodes: SimNode[]): boolean {
 		constrainNodesToGroupCircles(nodes, circles);
 		return true;
 	}
-	const [first, second] = circles;
-	const firstOnly = nodes.filter((node) => node.layerIds?.includes(first.id) && !node.layerIds?.includes(second.id));
-	const secondOnly = nodes.filter((node) => node.layerIds?.includes(second.id) && !node.layerIds?.includes(first.id));
-	const shared = nodes.filter((node) => node.layerIds?.includes(first.id) && node.layerIds?.includes(second.id));
-	const outside = nodes.filter((node) => !(node.layerIds?.includes(first.id)) && !(node.layerIds?.includes(second.id)));
-	place(firstOnly, first.x - first.radius * 0.2, 0, first.radius * 0.5);
-	place(secondOnly, second.x + second.radius * 0.2, 0, second.radius * 0.5);
-	place(shared, 0, 0, Math.min(first.radius, second.radius) * 0.22);
-	const outerY = Math.max(first.radius, second.radius) + 190;
-	place(outside, 0, outerY, Math.max(100, outside.length * 24));
+	const buckets = new Map<string, SimNode[]>();
+	for (const node of nodes) {
+		const ids = circles.filter((circle) => node.layerIds?.includes(circle.id)).map((circle) => circle.id).sort();
+		const key = ids.join("|");
+		const bucket = buckets.get(key) ?? [];
+		bucket.push(node);
+		buckets.set(key, bucket);
+	}
+	for (const [key, bucket] of buckets) {
+		const ids = key ? key.split("|") : [];
+		if (ids.length === 0) continue;
+		const relevant = circles.filter((circle) => ids.includes(circle.id));
+		const x = relevant.reduce((sum, circle) => sum + circle.x, 0) / relevant.length;
+		const y = relevant.reduce((sum, circle) => sum + circle.y, 0) / relevant.length;
+		place(bucket, x, y, Math.min(...relevant.map((circle) => circle.radius)) * (ids.length > 1 ? 0.2 : 0.5));
+	}
+	const outside = buckets.get("") ?? [];
+	const bottom = Math.max(...circles.map((circle) => circle.y + circle.radius));
+	place(outside, 0, bottom + 150, Math.max(100, outside.length * 24));
 	constrainNodesToGroupCircles(nodes, circles);
 	return true;
 }
