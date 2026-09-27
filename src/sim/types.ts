@@ -12,6 +12,8 @@ export interface SimNode {
 	targetRadius: number;
 	isCenter: boolean;
 	company?: string;
+	/** Layer ids assigned through frontmatter; used only by layout forces. */
+	layerIds?: string[];
 }
 
 export interface SimLink {

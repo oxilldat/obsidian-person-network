@@ -17,15 +17,17 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	defaultRole: { color: "#8a8a8a", ringStyle: "dotted", positionScore: 3 },
 
 	centerLabel: "",
+	selfNotePath: "",
+	layoutModel: "orbital",
 	enableBases: true,
 
 	newNoteFolder: "",
 	newNoteTemplatePath: "",
 	graphState: {
-		search: "", relationTypes: null, companies: null, showEdges: true, showGhosts: true,
-		nodeScale: 1, edgeWidth: 1.4,
+		search: "", relationTypes: null, companies: null, propertyFilters: [], propertyFilterMode: "all", showEdges: true, showGhosts: true,
+		nodeScale: 1, edgeWidth: 1.4, rotateOrbits: true,
 		linkDistance: 110, repulsionStrength: 2200, linkStrength: 0.5, centerStrength: 0.05,
-		companyStrength: 0.04,
+		companyStrength: 0.03,
 	},
 	photoCrops: {},
 	layerField: "layers",

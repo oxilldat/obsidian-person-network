@@ -12,14 +12,13 @@ export interface GraphSnapshot {
 }
 
 export interface GraphDiagnostics {
-	multipleSelf: string[];
 	duplicateNames: string[];
 	unknownRoles: string[];
 }
 
 type Listener = (snapshot: GraphSnapshot) => void;
 
-const EMPTY_SNAPSHOT: GraphSnapshot = { people: [], ghosts: [], edges: [], diagnostics: { multipleSelf: [], duplicateNames: [], unknownRoles: [] } };
+const EMPTY_SNAPSHOT: GraphSnapshot = { people: [], ghosts: [], edges: [], diagnostics: { duplicateNames: [], unknownRoles: [] } };
 
 /**
  * Owns the vault scan and keeps a live snapshot of people/ghosts/edges,
@@ -81,7 +80,6 @@ export class DataStore extends Component {
 			counts.set(key, (counts.get(key) ?? 0) + 1);
 		}
 		const diagnostics: GraphDiagnostics = {
-			multipleSelf: people.filter((person) => person.isSelf).map((person) => person.displayName),
 			duplicateNames: [...counts].filter(([, count]) => count > 1).map(([name]) => name),
 			unknownRoles: [...new Set(people.map((person) => person.relationType).filter((role): role is string => !!role && !settings.roles[role]))],
 		};

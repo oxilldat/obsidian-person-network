@@ -27,11 +27,15 @@ export function buildContactLinks(
 		else byNormalizedName.set(key, person);
 	}
 	const byPath = new Map<string, PersonNode>();
+	const ambiguousPaths = new Set<string>();
 	for (const person of people) {
 		const filePath = person.file.path || person.id;
-		byPath.set(normalizeName(filePath.replace(/\.md$/i, "")), person);
+		const fullKey = normalizeName(filePath.replace(/\.md$/i, ""));
+		byPath.set(fullKey, person);
 		const basename = person.file.basename || person.id.replace(/\.md$/i, "").split("/").pop() || "";
-		byPath.set(normalizeName(basename), person);
+		const baseKey = normalizeName(basename);
+		if (byPath.has(baseKey) && byPath.get(baseKey) !== person) ambiguousPaths.add(baseKey);
+		else byPath.set(baseKey, person);
 	}
 
 	const edges: GraphEdge[] = [];
@@ -41,7 +45,9 @@ export function buildContactLinks(
 	for (const person of people) {
 		for (const rawRef of person.ghostRefs) {
 			const refKey = normalizeName(rawRef.replace(/\.md$/i, ""));
-			const realTarget = byPath.get(refKey) ?? (ambiguousNames.has(refKey) ? undefined : byNormalizedName.get(refKey));
+			const realTarget = ambiguousPaths.has(refKey)
+				? undefined
+				: byPath.get(refKey) ?? (ambiguousNames.has(refKey) ? undefined : byNormalizedName.get(refKey));
 
 			if (realTarget) {
 				// Matched a real person: an edge (or nothing, if it's a

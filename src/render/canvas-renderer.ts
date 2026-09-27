@@ -1,12 +1,20 @@
-import { setIcon, type App } from "obsidian";
+import type { App } from "obsidian";
 import type { GraphSnapshot } from "../data/store";
-import type { GraphLayer, PhotoCropSettings, PluginSettings, RingStyle } from "../data/types";
+import type { GraphLayer, PhotoCropSettings, PluginSettings, PropertyFilterRule, RingStyle } from "../data/types";
+import { matchesPropertyFilters } from "../data/property-filter";
 import { t } from "../i18n";
 import { Simulation, type SimNode } from "../sim/simulation";
+import { arrangeGroupCircles } from "../sim/group-layout";
+import { arrangeOrbitalSystem, type OrbitRing } from "../sim/orbital-layout";
 import { clamp, easeInCubic, easeOutCubic, lerp } from "../utils/geometry";
 import { Camera } from "./camera";
 import { ImageCache } from "./image-cache";
-import { pickNode, type Pickable } from "./picking";
+import {
+	pickCompany,
+	pickNode,
+	type CompanyPickable,
+	type Pickable,
+} from "./picking";
 import { resolveRelationStyle } from "./relation-style";
 import { ThemeColorCache } from "./theme-colors";
 
@@ -16,6 +24,8 @@ export interface FilterState {
 	companies: Set<string> | null; // null = show all
 	showEdges: boolean;
 	showGhosts: boolean;
+	propertyFilters: PropertyFilterRule[];
+	propertyFilterMode: "all" | "any";
 }
 
 export interface ForcesState {
@@ -29,9 +39,10 @@ export interface ForcesState {
 export interface DisplayState {
 	nodeScale: number;
 	edgeWidth: number;
+	rotateOrbits: boolean;
 }
 
-const DEFAULT_DISPLAY: DisplayState = { nodeScale: 1, edgeWidth: 1.4 };
+const DEFAULT_DISPLAY: DisplayState = { nodeScale: 1, edgeWidth: 1.4, rotateOrbits: true };
 
 type NodeKind = "person" | "ghost" | "center";
 
@@ -43,6 +54,7 @@ interface RenderMeta {
 	company?: string;
 	photoCrop?: PhotoCropSettings;
 	personId?: string;
+	properties?: Record<string, unknown>;
 }
 
 const PERSON_RADIUS = 26;
@@ -61,10 +73,10 @@ const POP_IN_STAGGER_CAP_MS = 700;
 const POP_IN_START_SCALE = 0.2;
 /** Edges fade in only after the node pop-in wave finishes, over this long. */
 const EDGE_FADE_MS = 420;
+const HOVER_FADE_MS = 90;
+const PHYSICS_FRAME_MS = 1000 / 30;
 const FIT_PADDING = 60;
 const FIT_TWEEN_MS = 340;
-const LAYER_PADDING = 32;
-const LAYER_CORNER_RADIUS = 20;
 
 interface CameraTween {
 	startScale: number;
@@ -92,17 +104,6 @@ function roundedSquarePath(ctx: CanvasRenderingContext2D, cx: number, cy: number
 	ctx.arcTo(x + size, y + size, x, y + size, r);
 	ctx.arcTo(x, y + size, x, y, r);
 	ctx.arcTo(x, y, x + size, y, r);
-	ctx.closePath();
-}
-
-function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
-	const r = Math.min(Math.max(radius, 0), width / 2, height / 2);
-	ctx.beginPath();
-	ctx.moveTo(x + r, y);
-	ctx.arcTo(x + width, y, x + width, y + height, r);
-	ctx.arcTo(x + width, y + height, x, y + height, r);
-	ctx.arcTo(x, y + height, x, y, r);
-	ctx.arcTo(x, y, x + width, y, r);
 	ctx.closePath();
 }
 
@@ -141,8 +142,21 @@ function drawEdge(ctx: CanvasRenderingContext2D, source: { x: number; y: number 
 export class CanvasRenderer {
 	readonly camera = new Camera();
 	readonly simulation = new Simulation();
-	filter: FilterState = { search: "", relationTypes: null, companies: null, showEdges: true, showGhosts: true };
+	private filterState: FilterState = { search: "", relationTypes: null, companies: null, showEdges: true, showGhosts: true, propertyFilters: [], propertyFilterMode: "all" };
 	display: DisplayState = { ...DEFAULT_DISPLAY };
+
+	get filter(): FilterState {
+		return this.filterState;
+	}
+
+	set filter(value: FilterState) {
+		this.filterState = value;
+		// Filters change which members may define a visible spatial group.
+		// Keep the simulation geometry aligned with the circles that are drawn.
+		if (this.simulation.nodes.length > 0) this.syncLayerMembership();
+		if (this.getSettings().layoutModel === "orbital") this.layoutOrbitalSystem();
+		this.requestRedraw();
+	}
 
 	private readonly container: HTMLElement;
 	private readonly getSettings: () => PluginSettings;
@@ -154,23 +168,39 @@ export class CanvasRenderer {
 	private readonly resizeObserver: ResizeObserver;
 	private readonly imageCache: ImageCache;
 	private readonly themeColors: ThemeColorCache;
-	private readonly layerLabelsEl: HTMLElement;
 	private layers: GraphLayer[] = [];
 	private layerMembers: Record<string, string[]> = {};
+	private lastLayerMembershipKey = "";
 	private hiddenMemberIds = new Set<string>();
+	private orbitRings: OrbitRing[] = [];
 	private readonly requestedPhotos = new Set<string>();
 
 	private width = 1;
 	private height = 1;
 	private ratio = window.devicePixelRatio || 1;
 	private rafHandle: number | null = null;
+	private orbitalTimer: number | null = null;
+	private lastOrbitFrameAt = 0;
 	private destroyed = false;
 	private cameraInitialized = false;
 
 	private renderMeta = new Map<string, RenderMeta>();
 	private pickables: Pickable[] = [];
+	private companyPickables: CompanyPickable[] = [];
+	private connectedByNode = new Map<string, Set<string>>();
+	private hoveredNodeId: string | null = null;
+	private hoveredCompany: string | null = null;
+	private readonly hoverAlphaByNode = new Map<string, number>();
+	private readonly hoverAlphaByEdge = new Map<string, number>();
+	private readonly textWidthCache = new Map<string, number>();
+	private readonly portraitCache = new Map<string, HTMLCanvasElement>();
+	private lastHoverFrameAt = 0;
+	private hoverAnimationActive = false;
+	private lastPhysicsAt = 0;
+	private detachedMotionActive = false;
 	private lastStructureKey = "";
 	private lastRadiiKey = "";
+	private lastLayoutModel: PluginSettings["layoutModel"] | null = null;
 	/** id -> timestamp (ms) at which this node's pop-in should begin; removed once done. */
 	private bornAt = new Map<string, number>();
 	/** Timestamp (ms) at which edges start fading in — set to after the node wave lands. */
@@ -186,7 +216,6 @@ export class CanvasRenderer {
 		this.win = container.win;
 
 		this.canvas = container.createEl("canvas", { cls: "person-network-canvas" });
-		this.layerLabelsEl = container.createDiv({ cls: "person-network-layer-labels" });
 		const ctx = this.canvas.getContext("2d");
 		if (!ctx) throw new Error("2D canvas context is unavailable");
 		this.ctx = ctx;
@@ -203,12 +232,17 @@ export class CanvasRenderer {
 		return this.canvas;
 	}
 
+	getPersonLayers(personId: string): GraphLayer[] {
+		return this.layers.filter((layer) => (this.layerMembers[layer.id] ?? []).includes(personId));
+	}
+
 	setLayers(layers: GraphLayer[], members?: Record<string, string[]>): void {
 		this.layers = layers;
 		if (members) this.layerMembers = members;
 		this.hiddenMemberIds = new Set(layers
 			.filter((layer) => !layer.showMembers)
 			.flatMap((layer) => this.layerMembers[layer.id] ?? []));
+		this.syncLayerMembership();
 		this.requestRedraw();
 	}
 
@@ -217,6 +251,7 @@ export class CanvasRenderer {
 	}
 
 	restoreCamera(state: { scale: number; x: number; y: number }): void {
+		if (!Number.isFinite(state.scale) || !Number.isFinite(state.x) || !Number.isFinite(state.y)) return;
 		this.camera.scale = clamp(state.scale, this.camera.minScale, this.camera.maxScale);
 		this.camera.x = state.x;
 		this.camera.y = state.y;
@@ -226,17 +261,21 @@ export class CanvasRenderer {
 	}
 
 	hasVisibleContent(): boolean {
-		return this.simulation.nodes.length > 1;
+		return this.simulation.nodes.length > (this.getSettings().layoutModel === "orbital" ? 1 : 0);
 	}
 
 	onThemeChange(): void {
 		this.themeColors.invalidate();
+		this.textWidthCache.clear();
 		this.requestRedraw();
 	}
 
 	onPhotoModified(path: string): void {
 		this.imageCache.invalidate(path);
 		this.requestedPhotos.delete(path);
+		for (const key of this.portraitCache.keys()) {
+			if (key.startsWith(`${path}|`)) this.portraitCache.delete(key);
+		}
 		this.requestRedraw();
 	}
 
@@ -253,8 +292,11 @@ export class CanvasRenderer {
 		const nodeById = new Map<string, SimNode>();
 		const renderMeta = new Map<string, RenderMeta>();
 
-		const selfPerson = snapshot.people.find((person) => person.isSelf);
+		const orbital = settings.layoutModel !== "spatial";
+		this.simulation.setLayoutModel(settings.layoutModel);
+		const selfPerson = snapshot.people.find((person) => person.id === settings.selfNotePath);
 
+		if (orbital) {
 		const centerNode: SimNode = {
 			id: CENTER_ID,
 			x: 0,
@@ -276,10 +318,13 @@ export class CanvasRenderer {
 			photoPath: selfPerson?.photoPath,
 			photoCrop: selfPerson ? settings.photoCrops?.[selfPerson.id] : undefined,
 			personId: selfPerson?.id,
+			company: selfPerson?.company,
+			properties: selfPerson?.properties,
 		});
+		}
 
 		for (const person of snapshot.people) {
-			if (person.id === selfPerson?.id) continue;
+			if (orbital && person.id === selfPerson?.id) continue;
 			const prior = priorPositions.get(person.id);
 			const node: SimNode = {
 				id: person.id,
@@ -304,6 +349,7 @@ export class CanvasRenderer {
 				company: person.company,
 				photoCrop: settings.photoCrops?.[person.id],
 				personId: person.id,
+				properties: person.properties,
 			});
 		}
 
@@ -333,6 +379,13 @@ export class CanvasRenderer {
 				return source && target ? { source, target } : undefined;
 			})
 			.filter((link): link is { source: SimNode; target: SimNode } => link !== undefined);
+		const connectedByNode = new Map<string, Set<string>>();
+		for (const node of nodes) connectedByNode.set(node.id, new Set([node.id]));
+		for (const link of links) {
+			connectedByNode.get(link.source.id)?.add(link.target.id);
+			connectedByNode.get(link.target.id)?.add(link.source.id);
+		}
+		this.connectedByNode = connectedByNode;
 
 		// Reheat proportionally to what actually changed, so frequent data
 		// refreshes (e.g. Bases onDataUpdated) don't keep the layout jiggling:
@@ -346,6 +399,12 @@ export class CanvasRenderer {
 
 		this.renderMeta = renderMeta;
 		this.simulation.setGraph(nodes, links);
+		this.syncLayerMembership();
+		if (orbital) {
+			this.layoutOrbitalSystem();
+		} else if (priorPositions.size === 0 || this.lastLayoutModel !== "spatial") {
+			arrangeGroupCircles(nodes);
+		}
 
 		// Nodes that weren't in the previous layout get a staggered pop-in
 		// (closest-to-center first). Nodes carried over keep their appearance.
@@ -353,15 +412,99 @@ export class CanvasRenderer {
 		this.schedulePopIn(newNodes);
 
 		if (structureKey !== this.lastStructureKey) {
-			this.simulation.reheat(0.9);
+			if (!orbital) this.simulation.reheat(0.9);
 			// New/removed nodes: re-fit once it settles (unless already panned).
 			this.autoFitPending = true;
 		} else if (radiiKey !== this.lastRadiiKey) {
-			this.simulation.reheat(0.3);
+			if (!orbital) this.simulation.reheat(0.3);
+			else this.autoFitPending = true;
 		}
 		this.lastStructureKey = structureKey;
 		this.lastRadiiKey = radiiKey;
+		this.lastLayoutModel = settings.layoutModel;
 		this.requestRedraw();
+	}
+
+	private syncLayerMembership(): void {
+		const membershipByPerson = new Map<string, string[]>();
+		const metaByPerson = new Map<string, RenderMeta>();
+		for (const meta of this.renderMeta.values()) {
+			if (meta.personId) metaByPerson.set(meta.personId, meta);
+		}
+		const activeLayers = this.getSettings().layoutModel === "spatial"
+			? [...this.layers].filter((layer) => layer.showArea).sort((a, b) => b.priority - a.priority).slice(0, 2)
+			: [];
+		for (const layer of activeLayers) {
+			const visibleMembers = (this.layerMembers[layer.id] ?? []).filter((personId) => {
+				const entry = metaByPerson.get(personId);
+				return entry !== undefined && this.isVisible(entry);
+			});
+			// A one-person layer is listed in the panel but intentionally has no circle.
+			if (visibleMembers.length < 2) continue;
+			for (const personId of visibleMembers) {
+				const ids = membershipByPerson.get(personId) ?? [];
+				ids.push(layer.id);
+				membershipByPerson.set(personId, ids);
+			}
+		}
+		for (const node of this.simulation.nodes) {
+			const personId = this.renderMeta.get(node.id)?.personId;
+			node.layerIds = personId ? membershipByPerson.get(personId) ?? [] : [];
+		}
+		this.simulation.refreshGroupStructure();
+		const key = [...membershipByPerson.entries()]
+			.map(([personId, layerIds]) => `${personId}:${layerIds.sort().join(",")}`)
+			.sort().join("|");
+		if (key !== this.lastLayerMembershipKey && this.simulation.nodes.length > 0 && this.getSettings().layoutModel === "spatial") {
+			this.simulation.reheat(0.5);
+		}
+		this.lastLayerMembershipKey = key;
+	}
+
+	private layoutOrbitalSystem(): void {
+		if (this.getSettings().layoutModel !== "orbital") {
+			this.orbitRings = [];
+			return;
+		}
+		const visible = this.simulation.nodes.filter((node) => {
+			if (node.isCenter) return true;
+			const meta = this.renderMeta.get(node.id);
+			return meta !== undefined && this.isVisible(meta);
+		});
+		this.orbitRings = arrangeOrbitalSystem(visible, this.simulation.centerX, this.simulation.centerY);
+		this.lastOrbitFrameAt = 0;
+		this.simulation.stop();
+	}
+
+	private advanceOrbitalRotation(now: number): boolean {
+		if (this.getSettings().layoutModel !== "orbital" || !this.display.rotateOrbits || this.orbitRings.length === 0) return false;
+		if (this.lastOrbitFrameAt === 0) {
+			this.lastOrbitFrameAt = now;
+			return true;
+		}
+		const deltaSeconds = Math.min((now - this.lastOrbitFrameAt) / 1000, 0.1);
+		this.lastOrbitFrameAt = now;
+		if (deltaSeconds <= 0) return true;
+		const innerRadius = Math.max(this.orbitRings[0]?.radius ?? 1, 1);
+		const byId = new Map(this.simulation.nodes.map((node) => [node.id, node]));
+		for (const ring of this.orbitRings) {
+			// A restrained Kepler-like curve: inner orbits move faster, all in
+			// the same direction, while the graph remains readable on hover.
+			const angle = 0.045 * Math.sqrt(innerRadius / Math.max(ring.radius, 1)) * deltaSeconds;
+			const cosine = Math.cos(angle);
+			const sine = Math.sin(angle);
+			for (const id of ring.nodeIds) {
+				const node = byId.get(id);
+				if (!node) continue;
+				const x = node.x - this.simulation.centerX;
+				const y = node.y - this.simulation.centerY;
+				node.x = this.simulation.centerX + x * cosine - y * sine;
+				node.y = this.simulation.centerY + x * sine + y * cosine;
+				node.fx = node.x;
+				node.fy = node.y;
+			}
+		}
+		return true;
 	}
 
 	/** Assigns staggered born-times so a batch of nodes fades/grows in one after another. */
@@ -396,6 +539,15 @@ export class CanvasRenderer {
 
 	/** Scatters every non-center node to a fresh random position and replays the settle + pop-in animation. */
 	replayAnimation(): void {
+		if (this.getSettings().layoutModel === "orbital") {
+			const nodes = this.simulation.nodes.filter((node) => !node.isCenter);
+			this.layoutOrbitalSystem();
+			this.schedulePopIn(nodes);
+			this.userMovedCamera = false;
+			this.autoFitPending = true;
+			this.requestRedraw();
+			return;
+		}
 		const scattered: SimNode[] = [];
 		for (const node of this.simulation.nodes) {
 			if (node.isCenter) continue;
@@ -481,7 +633,7 @@ export class CanvasRenderer {
 
 	setForces(forces: ForcesState): void {
 		Object.assign(this.simulation.config, forces);
-		this.simulation.reheat(0.7);
+		if (this.getSettings().layoutModel === "spatial") this.simulation.reheat(0.7);
 		this.requestRedraw();
 	}
 
@@ -497,6 +649,7 @@ export class CanvasRenderer {
 	}
 
 	setDisplay(display: DisplayState): void {
+		if (display.rotateOrbits !== this.display.rotateOrbits) this.lastOrbitFrameAt = 0;
 		this.display = { ...display };
 		this.requestRedraw();
 	}
@@ -515,6 +668,7 @@ export class CanvasRenderer {
 	}
 
 	beginDrag(id: string): void {
+		if (this.getSettings().layoutModel === "orbital") return;
 		const node = this.findNode(id);
 		if (!node || node.isCenter) return;
 		node.fx = node.x;
@@ -524,33 +678,52 @@ export class CanvasRenderer {
 	}
 
 	dragTo(id: string, worldX: number, worldY: number): void {
+		if (this.getSettings().layoutModel === "orbital") return;
 		const node = this.findNode(id);
 		if (!node || node.isCenter) return;
 		node.fx = worldX;
 		node.fy = worldY;
+		node.x = worldX;
+		node.y = worldY;
+		node.vx = 0;
+		node.vy = 0;
 		this.requestRedraw();
 	}
 
 	endDrag(id: string): void {
+		if (this.getSettings().layoutModel === "orbital") return;
 		const node = this.findNode(id);
 		if (!node || node.isCenter) return;
 		node.fx = null;
 		node.fy = null;
-		this.simulation.reheat(0.3);
+		this.simulation.reheat(0.6);
 		this.requestRedraw();
 	}
 
 	requestRedraw(): void {
 		if (this.destroyed || this.rafHandle !== null) return;
+		if (this.orbitalTimer !== null) {
+			this.win.clearTimeout(this.orbitalTimer);
+			this.orbitalTimer = null;
+		}
 		this.rafHandle = this.win.requestAnimationFrame(this.loop);
+	}
+
+	private scheduleOrbitalFrame(): void {
+		if (this.destroyed || this.rafHandle !== null || this.orbitalTimer !== null) return;
+		this.orbitalTimer = this.win.setTimeout(() => {
+			this.orbitalTimer = null;
+			this.requestRedraw();
+		}, PHYSICS_FRAME_MS);
 	}
 
 	destroy(): void {
 		this.destroyed = true;
 		this.resizeObserver.disconnect();
 		if (this.rafHandle !== null) this.win.cancelAnimationFrame(this.rafHandle);
+		if (this.orbitalTimer !== null) this.win.clearTimeout(this.orbitalTimer);
 		this.imageCache.clear();
-		this.layerLabelsEl.remove();
+		this.portraitCache.clear();
 		this.canvas.remove();
 	}
 
@@ -579,7 +752,21 @@ export class CanvasRenderer {
 		this.rafHandle = null;
 		if (this.destroyed) return;
 		const now = performance.now();
-		if (!this.simulation.isSettled()) this.simulation.tick();
+		const orbitalMotionActive = this.advanceOrbitalRotation(now);
+		if (this.lastPhysicsAt === 0 || now - this.lastPhysicsAt >= PHYSICS_FRAME_MS) {
+			if (!this.simulation.isSettled()) {
+				this.simulation.tick();
+				// The settling tick may be the one that transitions to the detached
+				// outsider phase. Start that phase immediately so the RAF loop cannot
+				// stop one frame too early.
+				this.detachedMotionActive = this.simulation.isSettled()
+					? this.simulation.advanceDetachedPeople()
+					: false;
+			} else {
+				this.detachedMotionActive = this.simulation.advanceDetachedPeople();
+			}
+			this.lastPhysicsAt = now;
+		}
 		this.advanceCameraTween(now);
 		this.draw();
 
@@ -593,9 +780,9 @@ export class CanvasRenderer {
 
 		// Keep animating while physics is live, nodes pop in, edges fade in, or the camera is tweening.
 		const edgesAnimating = now < this.edgesRevealAt + EDGE_FADE_MS;
-		if (!this.simulation.isSettled() || this.bornAt.size > 0 || this.cameraTween || edgesAnimating) {
+		if (!this.simulation.isSettled() || this.detachedMotionActive || this.bornAt.size > 0 || this.cameraTween || edgesAnimating || this.hoverAnimationActive) {
 			this.requestRedraw();
-		}
+		} else if (orbitalMotionActive) this.scheduleOrbitalFrame();
 	};
 
 	private getPhotoBitmap(path: string): ImageBitmap | undefined {
@@ -615,8 +802,8 @@ export class CanvasRenderer {
 	}
 
 	private isVisible(meta: RenderMeta): boolean {
-		if (meta.personId && this.hiddenMemberIds.has(meta.personId)) return false;
-		if (meta.kind === "ghost") return this.filter.showGhosts;
+		if (this.getSettings().layoutModel === "spatial" && meta.personId && this.hiddenMemberIds.has(meta.personId)) return false;
+		if (meta.kind === "ghost") return this.filter.showGhosts && this.filter.propertyFilters.length === 0;
 		if (meta.kind === "person") {
 			if (this.filter.relationTypes && (!meta.relationType || !this.filter.relationTypes.has(meta.relationType))) {
 				return false;
@@ -625,12 +812,15 @@ export class CanvasRenderer {
 				return false;
 			}
 		}
+		if (this.filter.propertyFilters.length > 0 && !matchesPropertyFilters(meta.properties, this.filter.propertyFilters, this.filter.propertyFilterMode)) return false;
 		return true;
 	}
 
 	private drawLayers(ctx: CanvasRenderingContext2D): void {
-		this.layerLabelsEl.empty();
-		const ordered = [...this.layers].sort((a, b) => a.priority - b.priority);
+		if (this.getSettings().layoutModel !== "spatial") return;
+		const geometry = new Map(this.simulation.groupCircles.map((circle) => [circle.id, circle]));
+		const ordered = [...this.layers].filter((layer) => layer.showArea)
+			.sort((a, b) => b.priority - a.priority).slice(0, 2).reverse();
 		for (const layer of ordered) {
 			if (!layer.showArea) continue;
 			const memberSet = new Set(this.layerMembers[layer.id] ?? []);
@@ -639,12 +829,11 @@ export class CanvasRenderer {
 				return !!meta?.personId && memberSet.has(meta.personId) && this.isVisible(meta);
 			});
 			if (members.length < 2) continue;
-			const padding = LAYER_PADDING;
-			const minX = Math.min(...members.map((node) => node.x - node.radius)) - padding;
-			const minY = Math.min(...members.map((node) => node.y - node.radius)) - padding;
-			const maxX = Math.max(...members.map((node) => node.x + node.radius)) + padding;
-			const maxY = Math.max(...members.map((node) => node.y + node.radius)) + padding;
-			roundedRectPath(ctx, minX, minY, maxX - minX, maxY - minY, LAYER_CORNER_RADIUS);
+			const circle = geometry.get(layer.id);
+			if (!circle) continue;
+			const { x: centerX, y: centerY, radius } = circle;
+			ctx.beginPath();
+			ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
 			ctx.save();
 			ctx.fillStyle = layer.color;
 			ctx.globalAlpha = 0.1;
@@ -654,30 +843,75 @@ export class CanvasRenderer {
 			ctx.lineWidth = 1.5;
 			ctx.stroke();
 			ctx.restore();
-
-			if (layer.showLabel || layer.showIcon) {
-				const label = this.layerLabelsEl.createDiv({ cls: "person-network-layer-label" });
-				label.style.left = `${this.camera.x + minX * this.camera.scale}px`;
-				label.style.top = `${this.camera.y + minY * this.camera.scale}px`;
-				label.style.borderColor = layer.color;
-				label.style.backgroundColor = layer.color;
-				label.style.color = this.contrastTextColor(layer.color);
-				if (layer.showIcon) {
-					const icon = label.createSpan({ cls: "person-network-layer-label-icon" });
-					setIcon(icon, layer.icon || "layers");
-				}
-				if (layer.showLabel) label.createSpan({ text: layer.name });
-			}
 		}
 	}
 
-	private contrastTextColor(color: string): string {
-		const hex = color.replace(/^#/, "");
-		if (!/^[0-9a-f]{6}$/i.test(hex)) return "#ffffff";
-		const r = Number.parseInt(hex.slice(0, 2), 16);
-		const g = Number.parseInt(hex.slice(2, 4), 16);
-		const b = Number.parseInt(hex.slice(4, 6), 16);
-		return (r * 299 + g * 587 + b * 114) / 1000 > 110 ? "#111111" : "#ffffff";
+	private drawOrbits(ctx: CanvasRenderingContext2D, color: string): void {
+		if (this.getSettings().layoutModel !== "orbital") return;
+		ctx.save();
+		ctx.strokeStyle = color;
+		ctx.globalAlpha = 0.42;
+		ctx.lineWidth = 1;
+		ctx.setLineDash([]);
+		for (const ring of this.orbitRings) {
+			ctx.beginPath();
+			ctx.arc(this.simulation.centerX, this.simulation.centerY, ring.radius, 0, Math.PI * 2);
+			ctx.stroke();
+		}
+		ctx.restore();
+	}
+
+	private measureTextCached(ctx: CanvasRenderingContext2D, text: string): number {
+		const key = `${ctx.font}\n${text}`;
+		const cached = this.textWidthCache.get(key);
+		if (cached !== undefined) return cached;
+		const width = ctx.measureText(text).width;
+		this.textWidthCache.set(key, width);
+		return width;
+	}
+
+	private getPortrait(path: string, bitmap: ImageBitmap, cropSettings?: PhotoCropSettings): HTMLCanvasElement {
+		const zoom = clamp(cropSettings?.zoom ?? 1, 1, 4);
+		const centerXRatio = clamp(cropSettings?.centerX ?? 0.5, 0, 1);
+		const centerYRatio = clamp(cropSettings?.centerY ?? 0.5, 0, 1);
+		const screenPixels = PERSON_RADIUS * 2 * this.display.nodeScale * this.camera.scale * this.ratio;
+		const desiredSize = Math.min(1024, Math.max(64, 2 ** Math.ceil(Math.log2(Math.max(screenPixels, 1)))));
+		const key = `${path}|${centerXRatio}|${centerYRatio}|${zoom}|${desiredSize}`;
+		const cached = this.portraitCache.get(key);
+		if (cached) return cached;
+		const portrait = this.container.ownerDocument.createElement("canvas");
+		portrait.width = desiredSize;
+		portrait.height = desiredSize;
+		const context = portrait.getContext("2d");
+		if (context) {
+			const crop = Math.min(bitmap.width, bitmap.height) / zoom;
+			const centerX = centerXRatio * bitmap.width;
+			const centerY = centerYRatio * bitmap.height;
+			const sx = clamp(centerX - crop / 2, 0, bitmap.width - crop);
+			const sy = clamp(centerY - crop / 2, 0, bitmap.height - crop);
+			context.drawImage(bitmap, sx, sy, crop, crop, 0, 0, desiredSize, desiredSize);
+		}
+		this.portraitCache.set(key, portrait);
+		// Camera zoom can create several resolutions of the same crop. Keep the
+		// cache bounded so long sessions do not accumulate canvases indefinitely.
+		while (this.portraitCache.size > 96) {
+			const oldest = this.portraitCache.keys().next().value as string | undefined;
+			if (oldest === undefined) break;
+			this.portraitCache.delete(oldest);
+		}
+		return portrait;
+	}
+
+	pickCompany(screenX: number, screenY: number): string | undefined {
+		const world = this.camera.toWorld(screenX, screenY);
+		return pickCompany(this.companyPickables, world.x, world.y);
+	}
+
+	setHover(nodeId: string | null, company: string | null): void {
+		if (this.hoveredNodeId === nodeId && this.hoveredCompany === company) return;
+		this.hoveredNodeId = nodeId;
+		this.hoveredCompany = company;
+		this.requestRedraw();
 	}
 
 	private draw(): void {
@@ -698,7 +932,23 @@ export class CanvasRenderer {
 
 		const searchQuery = this.filter.search.trim().toLowerCase();
 		const now = performance.now();
+		const hoverDelta = this.lastHoverFrameAt > 0 ? Math.min(50, now - this.lastHoverFrameAt) : 16;
+		this.lastHoverFrameAt = now;
+		const hoverBlend = 1 - Math.exp(-hoverDelta / HOVER_FADE_MS);
+		this.hoverAnimationActive = false;
 		const pickables: Pickable[] = [];
+		const companyPickables: CompanyPickable[] = [];
+		const connected = this.hoveredNodeId ? this.connectedByNode.get(this.hoveredNodeId) ?? null : null;
+		for (const node of this.simulation.nodes) {
+			const meta = this.renderMeta.get(node.id);
+			const dimmed = (connected !== null && !connected.has(node.id)) ||
+				(this.hoveredCompany !== null && meta?.company !== this.hoveredCompany);
+			const target = dimmed ? 0.24 : 1;
+			const current = this.hoverAlphaByNode.get(node.id) ?? 1;
+			const next = Math.abs(target - current) < 0.01 ? target : lerp(current, target, hoverBlend);
+			this.hoverAlphaByNode.set(node.id, next);
+			if (next !== target) this.hoverAnimationActive = true;
+		}
 
 		// Visible world rect (+ margin for node radius and labels below nodes),
 		// so large graphs only pay for what's actually on screen.
@@ -712,16 +962,27 @@ export class CanvasRenderer {
 		const nodeVisible = (x: number, y: number): boolean =>
 			x >= viewMinX && x <= viewMaxX && y >= viewMinY && y <= viewMaxY;
 
+		this.drawOrbits(ctx, borderColor);
 		this.drawLayers(ctx);
 
 		const edgeReveal = clamp((now - this.edgesRevealAt) / EDGE_FADE_MS, 0, 1);
-		if (this.filter.showEdges && edgeReveal > 0) {
+		if (edgeReveal > 0) {
 			ctx.save();
-			ctx.globalAlpha = edgeReveal;
 			ctx.lineWidth = this.display.edgeWidth;
 			ctx.strokeStyle = borderColor;
 			ctx.setLineDash([]);
 			for (const link of this.simulation.links) {
+				const touchesHovered = this.hoveredNodeId !== null &&
+					(link.source.id === this.hoveredNodeId || link.target.id === this.hoveredNodeId);
+				const edgeTarget = this.hoveredNodeId ? (touchesHovered ? 1 : 0) : (this.filter.showEdges ? 1 : 0);
+				const edgeKey = `${link.source.id}>${link.target.id}`;
+				const edgeCurrent = this.hoverAlphaByEdge.get(edgeKey) ?? (this.filter.showEdges ? 1 : 0);
+				const edgeAlpha = Math.abs(edgeTarget - edgeCurrent) < 0.01
+					? edgeTarget
+					: lerp(edgeCurrent, edgeTarget, hoverBlend);
+				this.hoverAlphaByEdge.set(edgeKey, edgeAlpha);
+				if (edgeAlpha !== edgeTarget) this.hoverAnimationActive = true;
+				if (edgeAlpha <= 0.01) continue;
 				const sourceMeta = this.renderMeta.get(link.source.id);
 				const targetMeta = this.renderMeta.get(link.target.id);
 				if (!sourceMeta || !targetMeta) continue;
@@ -735,6 +996,7 @@ export class CanvasRenderer {
 				) {
 					continue;
 				}
+				ctx.globalAlpha = edgeReveal * edgeAlpha;
 				drawEdge(ctx, link.source, link.target);
 			}
 			ctx.restore();
@@ -749,7 +1011,8 @@ export class CanvasRenderer {
 			const pop = this.popIn(node.id, now);
 
 			ctx.save();
-			ctx.globalAlpha = (matchesSearch ? 1 : 0.25) * pop.alpha;
+			const hoverAlpha = this.hoverAlphaByNode.get(node.id) ?? 1;
+			ctx.globalAlpha = (matchesSearch ? 1 : 0.25) * hoverAlpha * pop.alpha;
 			if (pop.scale !== 1) {
 				ctx.translate(node.x, node.y);
 				ctx.scale(pop.scale, pop.scale);
@@ -765,14 +1028,8 @@ export class CanvasRenderer {
 			ctx.save();
 			ctx.clip();
 			if (bitmap) {
-				const cropSettings = meta.photoCrop;
-				const zoom = clamp(cropSettings?.zoom ?? 1, 1, 4);
-				const crop = Math.min(bitmap.width, bitmap.height) / zoom;
-				const centerX = clamp(cropSettings?.centerX ?? 0.5, 0, 1) * bitmap.width;
-				const centerY = clamp(cropSettings?.centerY ?? 0.5, 0, 1) * bitmap.height;
-				const sx = clamp(centerX - crop / 2, 0, bitmap.width - crop);
-				const sy = clamp(centerY - crop / 2, 0, bitmap.height - crop);
-				ctx.drawImage(bitmap, sx, sy, crop, crop, node.x - radius, node.y - radius, size, size);
+				const portrait = this.getPortrait(meta.photoPath ?? "", bitmap, meta.photoCrop);
+				ctx.drawImage(portrait, node.x - radius, node.y - radius, size, size);
 			} else {
 				ctx.fillStyle = secondaryBg;
 				ctx.fillRect(node.x - radius, node.y - radius, size, size);
@@ -808,7 +1065,16 @@ export class CanvasRenderer {
 			if (meta.kind === "person" && meta.company) {
 				ctx.fillStyle = mutedColor;
 				ctx.font = `9px ${fontFamily}`;
-				ctx.fillText(meta.company, node.x, node.y + radius + 26);
+				const companyY = node.y + radius + 26;
+				ctx.fillText(meta.company, node.x, companyY);
+				const width = this.measureTextCached(ctx, meta.company);
+				companyPickables.push({
+					company: meta.company,
+					x: node.x - width / 2 - 4,
+					y: companyY - 10,
+					width: width + 8,
+					height: 13,
+				});
 			}
 
 			ctx.restore();
@@ -817,6 +1083,7 @@ export class CanvasRenderer {
 
 		ctx.restore();
 		this.pickables = pickables;
+		this.companyPickables = companyPickables;
 
 		// Expire pop-ins for nodes that never got drawn (filtered out / removed),
 		// so a hidden node can't keep the animation loop alive forever.

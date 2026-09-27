@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+
+- Added two distinct graph layouts: a rotating planetary orbit model and a spatial model with dynamic Euler circles for groups.
+- Added a setting to pause orbital rotation while preserving the current positions.
+- Replaced the personal-note frontmatter flag with an explicit note selector in plugin settings.
+- Added Bases-style filters for arbitrary frontmatter properties with all/any matching.
+- Added 90 ms hover fading for a person's connections and for people from the same company; holding Shift hides the tooltip.
+- Reworked group geometry, membership constraints and circle placement in the spatial model.
+- Improved image caching, photo-crop validation, graph updates and rendering performance.
+- Fixed an empty Bases view when its initial query result was ready before the custom view finished loading.
+- Fixed person clicks being swallowed by the surrounding Bases pointer handlers.
+- Updated the Russian documentation for the current plugin behavior.
+
 ## 1.2.1
 
 - Fixed the layer button and layer panel appearing above the open graph controls.

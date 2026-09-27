@@ -95,6 +95,8 @@
 	pointer-events: none;
 	z-index: 20;
 }
+.person-network-tooltip-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.person-network-tooltip-group { padding: 1px 6px; border: 1px solid; border-radius: 999px; }
 
 /*
  * One persistent panel that toggles between a compact icon strip and a full
@@ -113,7 +115,7 @@
 	z-index: 32;
 	padding: 0;
 	background-color: var(--menu-background, var(--background-primary));
-	width: 240px;
+	width: 280px;
 	overflow: auto;
 	border-radius: var(--menu-radius, var(--radius-m, 6px));
 }
@@ -181,6 +183,77 @@
 
 .person-network-panel-root .setting-item-name {
 	font-size: var(--font-ui-small);
+}
+
+.person-network-panel-root .person-network-property-filter {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 8px 0;
+	padding: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary-alt);
+}
+
+.person-network-property-filter-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin: 10px 0 6px;
+}
+
+.person-network-property-filter-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+}
+
+.person-network-panel-root .person-network-property-filter-toolbar select {
+	min-width: 0;
+	flex: 1;
+}
+
+.person-network-property-filter-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	white-space: nowrap;
+	padding: 5px 8px;
+}
+
+.person-network-property-filter-add svg {
+	width: 15px;
+	height: 15px;
+}
+
+.person-network-property-filter-top {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.person-network-panel-root .person-network-property-filter-property {
+	flex: 1;
+	min-width: 0;
+	font-weight: var(--font-medium);
+}
+
+.person-network-property-filter-expression {
+	display: grid;
+	grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+	gap: 6px;
+}
+
+.person-network-property-filter-expression > :only-child {
+	grid-column: 1 / -1;
+}
+
+.person-network-panel-root .person-network-property-filter-expression select,
+.person-network-panel-root .person-network-property-filter-expression input {
+	min-width: 0;
+	width: 100%;
 }
 
 .person-network-panel-root::-webkit-scrollbar,
@@ -262,6 +335,7 @@
 	margin-bottom: 8px;
 	overflow: hidden;
 }
+.person-network-general-settings { margin-bottom: 28px; }
 
 /* Strip whatever background/radius/margin the theme puts on individual
    .setting-item rows — the group div above owns the card look instead,
@@ -396,6 +470,7 @@
 	background: var(--menu-background, var(--background-primary));
 	box-shadow: var(--shadow-s);
 }
+.person-network-layer-panel.is-hidden { display: none; }
 
 .person-network-layer-panel.is-close {
 	width: auto;
@@ -418,83 +493,14 @@
 .person-network-layer-list { display: flex; flex-direction: column; gap: 4px; }
 .person-network-layer-row { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 6px; border-radius: var(--radius-s, 6px); }
 .person-network-layer-row:hover { background: var(--background-modifier-hover); }
-.person-network-layer-row-icon { display: flex; color: var(--text-muted); }
-.person-network-layer-row-icon svg { width: 17px; height: 17px; }
 .person-network-layer-row-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-network-layer-toggle { opacity: .45; }
 .person-network-layer-toggle.is-active { opacity: 1; color: var(--text-accent); }
 .person-network-layer-empty { padding: 10px 8px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 
-.person-network-layer-labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
-.person-network-layer-label {
-	position: absolute;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	max-width: 320px;
-	padding: 4px 12px;
-	transform: translateY(-100%);
-	border-radius: 5px;
-	font-size: 28px;
-	font-weight: 400;
-	line-height: 1.2;
-	white-space: nowrap;
-}
-.person-network-layer-label-icon { display: flex; }
-.person-network-layer-label-icon svg { width: 24px; height: 24px; }
-
 .person-network-layer-settings { margin-top: 8px; padding: 0; overflow: hidden; }
 .person-network-layer-add .setting-item-control { width: 100%; }
 .person-network-layer-add .setting-item-control input { min-width: 0; flex: 1 1 150px; }
-.person-network-icon-picker {
-	position: fixed;
-	z-index: var(--layer-popover);
-	width: 380px;
-	max-width: calc(100vw - 16px);
-	padding: 10px;
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
-	box-shadow: var(--shadow-l);
-}
-.person-network-icon-picker-search {
-	width: 100%;
-	height: 42px;
-	margin-bottom: 8px;
-	font-size: var(--font-ui-medium);
-}
-.person-network-icon-picker-grid {
-	display: grid;
-	grid-template-columns: repeat(8, 1fr);
-	gap: 4px;
-	max-height: 350px;
-	overflow-y: auto;
-	padding: 4px;
-}
-.person-network-icon-picker-item {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 36px;
-	height: 36px;
-	padding: 0;
-	background: transparent;
-	box-shadow: none;
-	color: var(--text-muted);
-}
-.person-network-icon-picker-item:hover,
-.person-network-icon-picker-item.is-selected {
-	background: var(--background-modifier-hover);
-	color: var(--text-normal);
-}
-.person-network-icon-picker-item.is-selected { outline: 1px solid var(--interactive-accent); }
-.person-network-icon-picker-item svg { width: 20px; height: 20px; }
-.person-network-icon-picker-footer {
-	padding: 6px 4px 0;
-	color: var(--text-faint);
-	font-size: var(--font-ui-smaller);
-	text-align: center;
-}
 .person-network-layer-settings-header {
 	display: flex;
 	align-items: center;
@@ -503,10 +509,8 @@
 	cursor: pointer;
 }
 .person-network-layer-settings-header:hover { background: var(--background-modifier-hover); }
-.person-network-layer-chevron,
-.person-network-layer-header-icon { display: inline-flex; color: var(--text-muted); }
-.person-network-layer-chevron svg,
-.person-network-layer-header-icon svg { width: 18px; height: 18px; }
+.person-network-layer-chevron { display: inline-flex; color: var(--text-muted); }
+.person-network-layer-chevron svg { width: 18px; height: 18px; }
 .person-network-layer-settings.is-expanded .person-network-layer-chevron { transform: rotate(90deg); }
 .person-network-layer-header-title { flex: 1; min-width: 0; }
 .person-network-layer-header-name { color: var(--text-normal); font-weight: var(--font-semibold); }

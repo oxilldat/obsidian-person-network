@@ -1,4 +1,4 @@
-import { App, Modal, Notice, PluginSettingTab, Setting, getIconIds, setIcon } from "obsidian";
+import { App, Modal, Notice, PluginSettingTab, Setting, setIcon } from "obsidian";
 import type { GraphLayer, PluginSettings, RingStyle } from "../data/types";
 import { t, type TranslationKey } from "../i18n";
 import type PersonNetworkPlugin from "../main";
@@ -44,7 +44,6 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 	private readonly plugin: PersonNetworkPlugin;
 	private selectedLayerScopeId: string | null = null;
 	private readonly expandedLayers = new Set<string>();
-	private closeIconPicker: (() => void) | null = null;
 
 	constructor(app: App, plugin: PersonNetworkPlugin) {
 		super(app, plugin);
@@ -53,13 +52,12 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
-		this.closeIconPicker?.();
 		containerEl.empty();
 
-		this.renderGeneralSection(containerEl);
-		this.renderNewNoteSection(containerEl);
+		const generalGroup = this.renderGeneralSection(containerEl);
+		this.renderNewNoteSection(generalGroup);
 		this.renderRolesSection(containerEl);
-		this.renderLayersSection(containerEl);
+		if (this.plugin.settings.layoutModel === "spatial") this.renderLayersSection(containerEl);
 		this.renderPersonDetectionSection(containerEl);
 		this.renderAuthorCard(containerEl);
 	}
@@ -115,54 +113,6 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 		window.requestAnimationFrame(restore);
 	}
 
-	private openIconPicker(anchor: HTMLElement, current: string, onChoose: (icon: string) => void): void {
-		this.closeIconPicker?.();
-		const popup = document.body.createDiv({ cls: "person-network-icon-picker" });
-		const search = popup.createEl("input", {
-			cls: "person-network-icon-picker-search",
-			attr: { type: "search", placeholder: t("settings.layer.iconPlaceholder") },
-		});
-		const grid = popup.createDiv({ cls: "person-network-icon-picker-grid" });
-		const footer = popup.createDiv({ cls: "person-network-icon-picker-footer" });
-		const icons = getIconIds();
-		const render = (): void => {
-			const query = search.value.trim().toLowerCase();
-			const matches = icons.filter((name) => !query || name.toLowerCase().includes(query));
-			const visible = matches.slice(0, 240);
-			grid.empty();
-			for (const name of visible) {
-				const button = grid.createEl("button", {
-					cls: `person-network-icon-picker-item${name === current ? " is-selected" : ""}`,
-					attr: { type: "button", title: name, "aria-label": name },
-				});
-				setIcon(button, name);
-				button.addEventListener("click", () => { onChoose(name); close(); });
-			}
-			footer.setText(t("settings.layer.iconCount", { shown: String(visible.length), total: String(matches.length) }));
-		};
-		const rect = anchor.getBoundingClientRect();
-		popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 400))}px`;
-		popup.style.top = `${Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 490))}px`;
-		const close = (): void => {
-			document.removeEventListener("pointerdown", outside, true);
-			document.removeEventListener("keydown", escape);
-			popup.remove();
-			if (this.closeIconPicker === close) this.closeIconPicker = null;
-		};
-		const outside = (event: PointerEvent): void => {
-			if (!popup.contains(event.target as Node) && !anchor.contains(event.target as Node)) close();
-		};
-		const escape = (event: KeyboardEvent): void => { if (event.key === "Escape") close(); };
-		this.closeIconPicker = close;
-		search.addEventListener("input", render);
-		render();
-		window.setTimeout(() => {
-			document.addEventListener("pointerdown", outside, true);
-			document.addEventListener("keydown", escape);
-			search.focus();
-		}, 0);
-	}
-
 	private resetRolesToDefaults(): void {
 		const settings = this.plugin.settings;
 		settings.roles = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.roles)) as PluginSettings["roles"];
@@ -179,8 +129,8 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 	 * `.setting-item` — so the card look no longer depends on guessing what
 	 * the current theme does natively.
 	 */
-	private heading(containerEl: HTMLElement, headingKey: TranslationKey, descKey: TranslationKey): HTMLElement {
-		new Setting(containerEl).setName(t(headingKey)).setHeading().setDesc(t(descKey));
+	private heading(containerEl: HTMLElement, headingKey: TranslationKey, _descKey: TranslationKey): HTMLElement {
+		new Setting(containerEl).setName(t(headingKey)).setHeading();
 		return containerEl.createDiv({ cls: "person-network-settings-group" });
 	}
 
@@ -209,9 +159,36 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 		plusButton.addEventListener("click", () => update(value + 1));
 	}
 
-	private renderGeneralSection(containerEl: HTMLElement): void {
-		const group = this.heading(containerEl, "settings.generalHeading", "settings.generalDesc");
+	private renderGeneralSection(containerEl: HTMLElement): HTMLElement {
+		const group = containerEl.createDiv({ cls: "person-network-settings-group person-network-general-settings" });
 		const settings = this.plugin.settings;
+
+		new Setting(group)
+			.setName(t("settings.layoutModel.name"))
+			.setDesc(t("settings.layoutModel.desc"))
+			.addDropdown((dropdown) => dropdown
+				.addOption("orbital", t("settings.layoutModel.orbital"))
+				.addOption("spatial", t("settings.layoutModel.spatial"))
+				.setValue(settings.layoutModel)
+				.onChange(async (value) => {
+					settings.layoutModel = value === "spatial" ? "spatial" : "orbital";
+					await this.save();
+					this.redisplayPreservingScroll();
+				}));
+
+		new Setting(group)
+			.setName(t("settings.selfNote.name"))
+			.setDesc(t("settings.selfNote.desc"))
+			.addText((text) => {
+				text.setPlaceholder(t("settings.selfNote.placeholder")).setValue(settings.selfNotePath);
+				text.onChange(async (value) => { settings.selfNotePath = value.trim(); await this.save(); });
+				new MarkdownFileSuggest(this.app, text.inputEl).onSelect(async (file) => {
+					text.setValue(file.path);
+					settings.selfNotePath = file.path;
+					await this.save();
+					text.inputEl.blur();
+				});
+			});
 
 		new Setting(group)
 			.setName(t("settings.centerLabel.name"))
@@ -236,10 +213,10 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 					new Notice(t("settings.enableBases.reloadNotice"));
 				}),
 			);
+		return group;
 	}
 
-	private renderNewNoteSection(containerEl: HTMLElement): void {
-		const group = this.heading(containerEl, "settings.newNoteHeading", "settings.newNoteDesc");
+	private renderNewNoteSection(group: HTMLElement): void {
 		const settings = this.plugin.settings;
 
 		new Setting(group)
@@ -293,6 +270,12 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 			);
 
 		const defaultRow = new Setting(group).setName(t("settings.defaultRoleName"));
+		defaultRow.addDropdown((dropdown) => {
+			for (const ringStyle of RING_STYLES) dropdown.addOption(ringStyle, t(`settings.ringStyle.${ringStyle}`));
+			dropdown.setValue(settings.defaultRole.ringStyle).onChange(async (value) => {
+				settings.defaultRole.ringStyle = value as RingStyle; await this.save();
+			});
+		});
 		this.addPositionStepper(defaultRow, settings.defaultRole.positionScore, (value) => {
 			settings.defaultRole.positionScore = value;
 			void this.save();
@@ -303,15 +286,6 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 				await this.save();
 			}),
 		);
-		defaultRow.addDropdown((dropdown) => {
-			for (const ringStyle of RING_STYLES) {
-				dropdown.addOption(ringStyle, t(`settings.ringStyle.${ringStyle}`));
-			}
-			dropdown.setValue(settings.defaultRole.ringStyle).onChange(async (value) => {
-				settings.defaultRole.ringStyle = value as RingStyle;
-				await this.save();
-			});
-		});
 		defaultRow.addExtraButton((button) => {
 			button
 				.setIcon("trash")
@@ -325,6 +299,12 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 		for (const relationType of Object.keys(settings.roles)) {
 			const role = settings.roles[relationType];
 			const row = new Setting(group).setName(relationType);
+			row.addDropdown((dropdown) => {
+				for (const ringStyle of RING_STYLES) dropdown.addOption(ringStyle, t(`settings.ringStyle.${ringStyle}`));
+				dropdown.setValue(role.ringStyle).onChange(async (value) => {
+					role.ringStyle = value as RingStyle; await this.save();
+				});
+			});
 
 			this.addPositionStepper(row, role.positionScore, (value) => {
 				role.positionScore = value;
@@ -338,15 +318,6 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 				}),
 			);
 
-			row.addDropdown((dropdown) => {
-				for (const ringStyle of RING_STYLES) {
-					dropdown.addOption(ringStyle, t(`settings.ringStyle.${ringStyle}`));
-				}
-				dropdown.setValue(role.ringStyle).onChange(async (value) => {
-					role.ringStyle = value as RingStyle;
-					await this.save();
-				});
-			});
 
 			row.addExtraButton((button) =>
 				button
@@ -413,7 +384,7 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 	}
 
 	private renderLayersSection(containerEl: HTMLElement): void {
-		new Setting(containerEl).setName(t("settings.layersHeading")).setHeading().setDesc(t("settings.layersDesc"));
+		new Setting(containerEl).setName(t("settings.layersHeading")).setHeading();
 		const scopes = Object.values(this.plugin.settings.layerScopes ?? {});
 		if (scopes.length === 0) return;
 		this.selectedLayerScopeId = scopes.some((scope) => scope.id === this.selectedLayerScopeId)
@@ -436,8 +407,8 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 				if (!newName || !newIdentifier || scope.layers.some((layer) => layer.identifier === newIdentifier)) return;
 				const layer: GraphLayer = {
 					id: `layer:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`,
-					name: newName, identifier: newIdentifier, icon: "users", color: "#7b6cd9",
-					priority: scope.layers.length, showLabel: true, showIcon: true, showArea: true, showMembers: true,
+					name: newName, identifier: newIdentifier, color: "#7b6cd9",
+					priority: scope.layers.length, showArea: true, showMembers: true,
 				};
 				scope.layers.push(layer);
 				this.expandedLayers.add(layer.id);
@@ -457,8 +428,6 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 		const header = card.createDiv({ cls: "person-network-layer-settings-header" });
 		const chevron = header.createSpan({ cls: "person-network-layer-chevron" });
 		setIcon(chevron, "chevron-right");
-		const icon = header.createSpan({ cls: "person-network-layer-header-icon" });
-		setIcon(icon, layer.icon || "layers");
 		const title = header.createDiv({ cls: "person-network-layer-header-title" });
 		const headerName = title.createDiv({ cls: "person-network-layer-header-name", text: layer.name });
 		title.createDiv({ cls: "person-network-layer-header-id", text: layer.identifier });
@@ -505,19 +474,5 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 				await this.save();
 			}));
 
-		new Setting(body).setName(t("settings.layer.icon")).addButton((button) => {
-			button.setIcon(layer.icon || "layers").setButtonText(layer.icon || "layers");
-			button.onClick(() => this.openIconPicker(button.buttonEl, layer.icon || "layers", (selected) => {
-				layer.icon = selected;
-				button.setIcon(selected).setButtonText(selected);
-				setIcon(icon, selected);
-				void this.save();
-			}));
-		});
-
-		new Setting(body).setName(t("settings.layer.showLabel")).addToggle((toggle) => toggle
-			.setValue(layer.showLabel).onChange(async (value) => { layer.showLabel = value; await this.save(); }));
-		new Setting(body).setName(t("settings.layer.showIcon")).addToggle((toggle) => toggle
-			.setValue(layer.showIcon).onChange(async (value) => { layer.showIcon = value; await this.save(); }));
 	}
 }

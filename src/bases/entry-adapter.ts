@@ -39,10 +39,6 @@ function readStringList(entry: BasesEntry, prop: BasesPropertyId | null): string
 	return single.length > 0 ? [single] : [];
 }
 
-function readBoolean(entry: BasesEntry, prop: BasesPropertyId): boolean {
-	return entry.getValue(prop)?.isTruthy() ?? false;
-}
-
 /**
  * Converts one Bases query result into the same GraphSnapshot shape the
  * standalone DataStore produces — downstream rendering can't tell the
@@ -58,7 +54,6 @@ export function adaptEntries(
 	mapping: BasesFieldMapping,
 	settings: PluginSettings,
 ): GraphSnapshot {
-	const isSelfProp = `note.${FIXED_FIELDS.isSelf}` as BasesPropertyId;
 	const companyProp = `note.${FIXED_FIELDS.company}` as BasesPropertyId;
 
 	const people: PersonNode[] = [];
@@ -78,7 +73,6 @@ export function adaptEntries(
 			relationType,
 			company: rawCompany !== undefined ? stripWikilink(rawCompany) : undefined,
 			positionScore: resolveRole(relationType, settings).positionScore,
-			isSelf: readBoolean(entry, isSelfProp),
 			ghostRefs: readStringList(entry, mapping.contactsProp)
 				.map(stripWikilink)
 				.filter((name) => name.length > 0),
@@ -95,7 +89,6 @@ export function adaptEntries(
 		counts.set(key, (counts.get(key) ?? 0) + 1);
 	}
 	const diagnostics: GraphDiagnostics = {
-		multipleSelf: people.filter((person) => person.isSelf).map((person) => person.displayName),
 		duplicateNames: [...counts].filter(([, count]) => count > 1).map(([name]) => name),
 		unknownRoles: [...new Set(people.map((person) => person.relationType).filter((role): role is string => !!role && !settings.roles[role]))],
 	};

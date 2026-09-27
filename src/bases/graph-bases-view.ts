@@ -10,6 +10,7 @@ import { adaptEntries, type BasesFieldMapping } from "./entry-adapter";
 import { OPTION_KEYS } from "./options";
 import { t } from "../i18n";
 import { resolveLayerMembers } from "../layers/membership";
+import { readLayerIdentifiers } from "../layers/membership";
 
 export const BASES_VIEW_TYPE = "person-network";
 
@@ -42,10 +43,15 @@ export class PersonNetworkBasesView extends BasesView {
 
 	override onload(): void {
 		this.ensureUi();
+		// Bases may finish its initial query before the custom view component is
+		// loaded. Render the current result immediately instead of waiting for a
+		// later vault/config change to trigger onDataUpdated again.
+		if (this.data?.data) this.onDataUpdated();
 		this.unregisterSettingsListener = this.plugin.registerSettingsListener(() => {
 			const scope = this.plugin.getLayerScope(this.layerScopeId, this.config.name || t("bases.viewName"));
 			this.renderer?.setLayers(scope.layers);
 			this.layerPanel?.update(scope.layers);
+			this.layerPanel?.setVisible(this.plugin.settings.layoutModel === "spatial");
 			this.onDataUpdated();
 		});
 	}
@@ -75,6 +81,8 @@ export class PersonNetworkBasesView extends BasesView {
 			search: "",
 			relationTypes: null,
 			companies: null,
+			propertyFilters: [],
+			propertyFilterMode: "all",
 			showEdges: this.readToggle(OPTION_KEYS.showEdges),
 			showGhosts: this.readToggle(OPTION_KEYS.showGhosts),
 		};
@@ -99,12 +107,13 @@ export class PersonNetworkBasesView extends BasesView {
 			this.renderer?.setLayers(layerScope.layers);
 			void this.plugin.saveGraphState();
 		});
+		this.layerPanel.setVisible(this.plugin.settings.layoutModel === "spatial");
 
 		wireGraphInteraction(this, this.renderer, this.tooltip, {
 			onNodeClick: (id) => this.handleClick(id),
 			onNodeContextMenu: (id, event) => {
 				const person = id === CENTER_NODE_ID
-					? [...this.peopleById.values()].find((candidate) => candidate.isSelf)
+					? this.peopleById.get(this.plugin.settings.selfNotePath)
 					: this.peopleById.get(id);
 				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
 					await this.plugin.saveSettings();
@@ -114,8 +123,14 @@ export class PersonNetworkBasesView extends BasesView {
 				}, layerScope.layers);
 			},
 			getTooltipLines: (id) => {
-				const person = this.peopleById.get(id);
-				if (person) return personTooltipLines(person);
+				const person = id === CENTER_NODE_ID
+					? this.peopleById.get(this.plugin.settings.selfNotePath)
+					: this.peopleById.get(id);
+				if (person) {
+					const frontmatter = this.app.metadataCache.getFileCache(person.file)?.frontmatter;
+					const identifiers = new Set(readLayerIdentifiers(frontmatter?.[this.plugin.settings.layerField]));
+					return personTooltipLines(person, layerScope.layers.filter((layer) => identifiers.has(layer.identifier)));
+				}
 				const ghost = this.ghostsById.get(id);
 				if (ghost) return ghostTooltipLines(ghost);
 				return null;

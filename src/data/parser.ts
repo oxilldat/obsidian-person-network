@@ -57,7 +57,9 @@ export function resolvePhotoPath(app: App, rawPath: string, sourcePath: string):
 
 /** A role supplies both the ring style and the position score — looked up by relation type value. */
 export function resolveRole(relationType: string | undefined, settings: PluginSettings): PersonRole {
-	if (relationType && settings.roles[relationType]) return settings.roles[relationType];
+	if (relationType && Object.prototype.hasOwnProperty.call(settings.roles, relationType)) {
+		return settings.roles[relationType];
+	}
 	return settings.defaultRole;
 }
 
@@ -70,6 +72,7 @@ export function parsePerson(
 	if (!matchesPersonTag(cache, settings.personTag)) return null;
 
 	const fm: Frontmatter = cache?.frontmatter ?? {};
+	const properties = Object.fromEntries(Object.entries(fm).filter(([key]) => key !== "position"));
 
 	const rawName = fm[settings.nameField];
 	const normalizedName = typeof rawName === "string" ? rawName.trim() : "";
@@ -84,9 +87,6 @@ export function parsePerson(
 	const rawCompany = fm[FIXED_FIELDS.company];
 	const company = rawCompany !== undefined ? stripWikilink(String(rawCompany)) : undefined;
 
-	const isSelfRaw = fm[FIXED_FIELDS.isSelf];
-	const isSelf = isSelfRaw === true || isSelfRaw === "true";
-
 	const ghostRefs = toStringList(fm[settings.potentialContactsField]).map((entry) =>
 		stripWikilink(entry),
 	).filter((entry) => entry.length > 0);
@@ -99,7 +99,7 @@ export function parsePerson(
 		relationType,
 		company,
 		positionScore: resolveRole(relationType, settings).positionScore,
-		isSelf,
 		ghostRefs,
+		properties,
 	};
 }

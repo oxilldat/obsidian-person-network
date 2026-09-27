@@ -4,18 +4,16 @@ Person Network is already listed in the Obsidian Community directory. Updates ar
 
 Repository: https://github.com/oxilldat/obsidian-person-network
 
-## Release 1.1.0
+## Release process
 
 1. Commit the reviewed source to the default `main` branch.
-2. Confirm that `package.json`, `package-lock.json` and `manifest.json` use `1.1.0`, and that `versions.json` maps `1.1.0` to the required Obsidian version.
+2. Confirm that `package.json`, `package-lock.json` and `manifest.json` use the same version, and that `versions.json` maps it to the required Obsidian version.
 3. Push `main` to GitHub.
-4. Create tag `1.1.0` from that exact commit and push the tag.
-5. GitHub Actions runs tests, verifies the tag, creates a minified production build and publishes a release titled `1.1.0`.
+4. Create a tag matching the manifest version from that exact commit and push the tag.
+5. GitHub Actions runs tests, verifies the tag, creates a minified production build and publishes the release.
 6. Verify that the release contains `main.js`, `manifest.json` and `styles.css` as three individual downloadable assets.
-7. Open https://community.obsidian.md/plugins/person-network and confirm that version `1.1.0` becomes available.
+7. Open https://community.obsidian.md/plugins/person-network and confirm that the new version becomes available.
 
 The workflow can safely be rerun for the same tag: it replaces the three release assets without deleting the release.
 
-## Later releases
-
-Increment the semantic version, update `versions.json` and `CHANGELOG.md`, merge to `main`, then push a matching tag. The Community directory reads updates from GitHub automatically.
+For every later release, increment the semantic version, update `versions.json` and `CHANGELOG.md`, merge to `main`, then push a matching tag. The Community directory reads updates from GitHub automatically.

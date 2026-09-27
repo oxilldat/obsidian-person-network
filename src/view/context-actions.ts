@@ -62,7 +62,6 @@ export function showNodeContextMenu(
 			const assigned = readLayerIdentifiers(frontmatter?.[settings.layerField]).includes(layer.identifier);
 			menu.addItem((item) => item
 				.setTitle(layer.name)
-				.setIcon(layer.icon || "layers")
 				.setChecked(assigned)
 				.onClick(() => {
 					void app.fileManager.processFrontMatter(person.file, (fm) => {

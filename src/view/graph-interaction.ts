@@ -1,19 +1,18 @@
 import type { Component } from "obsidian";
-import type { GhostNode, PersonNode } from "../data/types";
+import type { GhostNode, GraphLayer, PersonNode } from "../data/types";
 import { t } from "../i18n";
 import { CENTER_NODE_ID, type CanvasRenderer } from "../render/canvas-renderer";
-import type { Tooltip } from "./tooltip";
+import type { Tooltip, TooltipData } from "./tooltip";
 
-export function personTooltipLines(person: PersonNode): string[] {
+export function personTooltipLines(person: PersonNode, groups: GraphLayer[] = []): TooltipData {
 	const lines = [person.displayName];
-	if (person.company) lines.push(t("tooltip.company", { value: person.company }));
-	if (person.relationType) lines.push(t("tooltip.relation", { value: person.relationType }));
-	lines.push(t("tooltip.position", { value: person.positionScore }));
-	return lines;
+	if (person.company) lines.push(person.company);
+	if (person.relationType) lines.push(`${person.relationType} (${person.positionScore}/10)`);
+	return { lines, groups: groups.map((group) => ({ name: group.name, color: group.color })) };
 }
 
-export function ghostTooltipLines(ghost: GhostNode): string[] {
-	return [ghost.displayName, t("tooltip.ghostHint")];
+export function ghostTooltipLines(ghost: GhostNode): TooltipData {
+	return { lines: [ghost.displayName, t("tooltip.ghostHint")] };
 }
 
 export interface GraphInteractionCallbacks {
@@ -22,7 +21,7 @@ export interface GraphInteractionCallbacks {
 	onNodeContextMenu?(id: string, event: MouseEvent): void;
 	onViewChanged?(): void;
 	/** Lines for the hover tooltip, or null to show none for this node. */
-	getTooltipLines(id: string): string[] | null;
+	getTooltipLines(id: string): TooltipData | null;
 }
 
 const CLICK_MOVE_THRESHOLD = 5;
@@ -44,8 +43,13 @@ export function wireGraphInteraction(
 	let draggingId: string | null = null;
 	let isPanning = false;
 	let pointerDownId: string | null = null;
+	let activePointerId: number | null = null;
 	let pointerDownPos = { x: 0, y: 0 };
 	let lastPointer = { x: 0, y: 0 };
+	let maxPointerDistance = 0;
+	let hoveredHitId: string | undefined;
+	let pointerInside = false;
+	let shiftPressed = false;
 
 	const getPointerPosition = (event: { clientX: number; clientY: number }): { x: number; y: number } => {
 		const rect = canvas.getBoundingClientRect();
@@ -53,12 +57,12 @@ export function wireGraphInteraction(
 	};
 
 	const updateTooltip = (hitId: string | undefined, pos: { x: number; y: number }): void => {
-		if (!hitId || hitId === CENTER_NODE_ID) {
+		if (!hitId) {
 			tooltip.hide();
 			return;
 		}
 		const lines = callbacks.getTooltipLines(hitId);
-		if (lines && lines.length > 0) tooltip.show(lines, pos.x, pos.y);
+		if (lines && lines.lines.length > 0) tooltip.show(lines, pos.x, pos.y);
 		else tooltip.hide();
 	};
 
@@ -69,10 +73,18 @@ export function wireGraphInteraction(
 
 		lastPointer = pos;
 		pointerDownPos = pos;
+		maxPointerDistance = 0;
+		activePointerId = event.pointerId;
 		pointerDownId = hitId ?? null;
+		// Keep the whole gesture on our canvas. Bases installs its own pointer
+		// handlers around custom views and may consume the matching pointerup
+		// before a window-level listener sees it.
+		canvas.setPointerCapture(event.pointerId);
+		renderer.setHover(null, null);
+		hoveredHitId = undefined;
+		tooltip.hide();
 
 		if (hitId) {
-			canvas.setPointerCapture(event.pointerId);
 			draggingId = hitId;
 			renderer.beginDrag(hitId);
 		} else {
@@ -83,6 +95,9 @@ export function wireGraphInteraction(
 
 	component.registerDomEvent(canvas, "pointermove", (event: PointerEvent) => {
 		const pos = getPointerPosition(event);
+		pointerInside = true;
+		if (activePointerId !== null && event.pointerId !== activePointerId) return;
+		maxPointerDistance = Math.max(maxPointerDistance, Math.hypot(pos.x - pointerDownPos.x, pos.y - pointerDownPos.y));
 
 		if (draggingId) {
 			const world = renderer.worldPointFromScreen(pos.x, pos.y);
@@ -91,36 +106,60 @@ export function wireGraphInteraction(
 			renderer.camera.pan(pos.x - lastPointer.x, pos.y - lastPointer.y);
 			renderer.requestRedraw();
 		} else {
-			const hitId = renderer.pick(pos.x, pos.y);
-			canvas.style.cursor = hitId && hitId !== CENTER_NODE_ID ? "pointer" : "default";
-			updateTooltip(hitId, pos);
+			const company = renderer.pickCompany(pos.x, pos.y);
+			const hitId = company ? undefined : renderer.pick(pos.x, pos.y);
+			hoveredHitId = hitId;
+			renderer.setHover(hitId ?? null, company ?? null);
+			canvas.style.cursor = company || (hitId && hitId !== CENTER_NODE_ID) ? "pointer" : "default";
+			if (shiftPressed || event.shiftKey) tooltip.hide();
+			else updateTooltip(hitId, pos);
 		}
 
 		lastPointer = pos;
 	});
 
-	const finishPointer = (event?: PointerEvent): void => {
+	const finishPointer = (event: PointerEvent, cancelled = false): void => {
+		if (activePointerId === null || event.pointerId !== activePointerId) return;
+		const pos = getPointerPosition(event);
+		maxPointerDistance = Math.max(maxPointerDistance, Math.hypot(pos.x - pointerDownPos.x, pos.y - pointerDownPos.y));
 		if (draggingId) renderer.endDrag(draggingId);
 
-		const moved = Math.hypot(lastPointer.x - pointerDownPos.x, lastPointer.y - pointerDownPos.y);
-		if (pointerDownId && pointerDownId !== CENTER_NODE_ID && moved < CLICK_MOVE_THRESHOLD) {
+		if (!cancelled && pointerDownId && pointerDownId !== CENTER_NODE_ID && maxPointerDistance < CLICK_MOVE_THRESHOLD) {
 			callbacks.onNodeClick(pointerDownId);
 		}
 
 		draggingId = null;
 		isPanning = false;
 		pointerDownId = null;
+		activePointerId = null;
 		callbacks.onViewChanged?.();
-		if (event && canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+		if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
 	};
-	component.registerDomEvent(canvas.win, "pointerup", finishPointer);
-	component.registerDomEvent(canvas.win, "pointercancel", finishPointer);
+	component.registerDomEvent(canvas, "pointerup", (event: PointerEvent) => finishPointer(event));
+	component.registerDomEvent(canvas, "pointercancel", (event: PointerEvent) => finishPointer(event, true));
+
+	component.registerDomEvent(canvas.win, "keydown", (event: KeyboardEvent) => {
+		if (event.key !== "Shift") return;
+		shiftPressed = true;
+		tooltip.hide();
+	});
+	component.registerDomEvent(canvas.win, "keyup", (event: KeyboardEvent) => {
+		if (event.key !== "Shift") return;
+		shiftPressed = false;
+		if (pointerInside && !draggingId && !isPanning) updateTooltip(hoveredHitId, lastPointer);
+	});
+	component.registerDomEvent(canvas.win, "blur", () => {
+		shiftPressed = false;
+		tooltip.hide();
+	});
 
 	component.registerDomEvent(canvas, "wheel", (event: WheelEvent) => {
 		event.preventDefault();
 		const pos = getPointerPosition(event);
 		const factor = event.deltaY < 0 ? 1.1 : 0.9;
 		renderer.notifyUserInteraction();
+		renderer.setHover(null, null);
+		tooltip.hide();
 		renderer.camera.zoomAt(pos.x, pos.y, factor);
 		renderer.requestRedraw();
 		callbacks.onViewChanged?.();
@@ -138,5 +177,11 @@ export function wireGraphInteraction(
 			callbacks.onNodeContextMenu?.(hitId, event);
 		}
 	});
-	component.registerDomEvent(canvas, "pointerleave", () => tooltip.hide());
+	component.registerDomEvent(canvas, "pointerleave", () => {
+		pointerInside = false;
+		hoveredHitId = undefined;
+		tooltip.hide();
+		renderer.setHover(null, null);
+		canvas.style.cursor = "default";
+	});
 }

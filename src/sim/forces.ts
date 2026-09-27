@@ -89,7 +89,7 @@ export function applyRadialPositionForce(
 		const dy = node.y - centerY;
 		const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 		const diff = dist - node.targetRadius;
-		const strength = alpha * 0.12;
+		const strength = alpha * 0.08;
 		node.vx -= (dx / dist) * diff * strength;
 		node.vy -= (dy / dist) * diff * strength;
 	}
@@ -117,6 +117,32 @@ export function applyCompanyForce(nodes: SimNode[], alpha: number, strength: num
 	}
 }
 
+/** Softly compacts members; exact circle membership is enforced after integration. */
+export function applyLayerForce(
+	nodes: SimNode[],
+	alpha: number,
+	cohesion = 0.07,
+): void {
+	const groups = new Map<string, SimNode[]>();
+	for (const node of nodes) {
+		for (const layerId of node.layerIds ?? []) {
+			const group = groups.get(layerId) ?? [];
+			group.push(node);
+			groups.set(layerId, group);
+		}
+	}
+	for (const members of groups.values()) {
+		if (members.length < 2) continue;
+		const centroidX = members.reduce((sum, node) => sum + node.x, 0) / members.length;
+		const centroidY = members.reduce((sum, node) => sum + node.y, 0) / members.length;
+		for (const member of members) {
+			if (member.fx !== null) continue;
+			member.vx += (centroidX - member.x) * cohesion * alpha;
+			member.vy += (centroidY - member.y) * cohesion * alpha;
+		}
+	}
+}
+
 /** Keeps node circles (and their labels) from overlapping, so text stays legible. */
 export function applyCollisionForce(
 	nodes: SimNode[],
@@ -124,16 +150,30 @@ export function applyCollisionForce(
 	alpha: number,
 	padding = 34,
 ): void {
+	const indices = new Map(nodes.map((node, index) => [node, index]));
 	for (const node of nodes) {
 		const neighbors = grid.queryNear(node.x, node.y);
 		for (const other of neighbors) {
-			if (other === node) continue;
+			if ((indices.get(other) ?? -1) <= (indices.get(node) ?? -1)) continue;
 			const minDist = node.radius + other.radius + padding;
-			const dx = node.x - other.x;
-			const dy = node.y - other.y;
-			const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+			let dx = node.x - other.x;
+			let dy = node.y - other.y;
+			let dist = Math.hypot(dx, dy);
+			if (dist < 0.001) {
+				// A zero vector cannot produce a separating force. Pick a stable
+				// direction so identical initial positions always split apart.
+				let hash = 0;
+				const pair = `${node.id}\0${other.id}`;
+				for (let index = 0; index < pair.length; index++) hash = (hash * 31 + pair.charCodeAt(index)) | 0;
+				const angle = (Math.abs(hash) % 360) * Math.PI / 180;
+				dx = Math.cos(angle) * 0.001;
+				dy = Math.sin(angle) * 0.001;
+				dist = 0.001;
+			}
 			if (dist >= minDist) continue;
-			const overlap = ((minDist - dist) / dist) * alpha * 0.5;
+			const movable = Number(node.fx === null) + Number(other.fx === null);
+			if (movable === 0) continue;
+			const overlap = ((minDist - dist) / dist) * alpha / movable;
 			const pushX = dx * overlap;
 			const pushY = dy * overlap;
 			if (node.fx === null) {

@@ -1,6 +1,8 @@
 import { setIcon, Setting } from "obsidian";
 import { t, type TranslationKey } from "../i18n";
 import type { DisplayState, FilterState, ForcesState } from "../render/canvas-renderer";
+import type { LayoutModel } from "../data/types";
+import type { PropertyFilterOperator, PropertyFilterRule } from "../data/types";
 
 export type { DisplayState, ForcesState } from "../render/canvas-renderer";
 
@@ -8,13 +10,14 @@ export interface FilterPanelOptions {
 	initialFilter: FilterState;
 	initialForces: ForcesState;
 	initialDisplay: DisplayState;
-	relationTypes: string[];
-	companies: string[];
+	properties: string[];
 	onChange: (filter: FilterState) => void;
 	onForcesChange: (forces: ForcesState) => void;
 	onDisplayChange: (display: DisplayState) => void;
 	onReplayAnimation: () => void;
 	onOpenChange?: (open: boolean) => void;
+	initialLayoutModel: LayoutModel;
+	onLayoutModelChange: (model: LayoutModel) => void;
 }
 
 function arraysEqual(a: string[], b: string[]): boolean {
@@ -63,28 +66,36 @@ export class FilterPanel {
 	private readonly defaultFilter: FilterState;
 	private readonly defaultForces: ForcesState;
 	private readonly defaultDisplay: DisplayState;
-	private relationTypes: string[];
-	private companies: string[];
+	private properties: string[];
 	private readonly onChange: (filter: FilterState) => void;
 	private readonly onForcesChange: (forces: ForcesState) => void;
 	private readonly onDisplayChange: (display: DisplayState) => void;
 	private readonly onReplayAnimation: () => void;
 	private readonly onOpenChange?: (open: boolean) => void;
+	private layoutModel: LayoutModel;
+	private readonly onLayoutModelChange: (model: LayoutModel) => void;
 
 	constructor(container: HTMLElement, options: FilterPanelOptions) {
-		this.filter = { ...options.initialFilter };
+		this.filter = { ...options.initialFilter, propertyFilters: [...options.initialFilter.propertyFilters] };
 		this.forces = { ...options.initialForces };
 		this.display = { ...options.initialDisplay };
-		this.defaultFilter = { ...options.initialFilter };
+		this.defaultFilter = { ...options.initialFilter, propertyFilters: [...options.initialFilter.propertyFilters] };
 		this.defaultForces = { ...options.initialForces };
 		this.defaultDisplay = { ...options.initialDisplay };
-		this.relationTypes = options.relationTypes;
-		this.companies = options.companies;
+		this.properties = options.properties;
+		// The former role/company controls are gone. Clear persisted choices so
+		// an invisible legacy filter cannot keep contacts hidden.
+		this.filter.relationTypes = null;
+		this.filter.companies = null;
+		this.defaultFilter.relationTypes = null;
+		this.defaultFilter.companies = null;
 		this.onChange = options.onChange;
 		this.onForcesChange = options.onForcesChange;
 		this.onDisplayChange = options.onDisplayChange;
 		this.onReplayAnimation = options.onReplayAnimation;
 		this.onOpenChange = options.onOpenChange;
+		this.layoutModel = options.initialLayoutModel;
+		this.onLayoutModelChange = options.onLayoutModelChange;
 
 		this.rootEl = container.createDiv({ cls: "person-network-panel-root is-close" });
 
@@ -97,13 +108,11 @@ export class FilterPanel {
 		this.render();
 	}
 
-	updateAvailable(relationTypes: string[], companies: string[]): void {
+	updateAvailable(properties: string[]): void {
 		// Rebuilding the panel DOM drops input focus, so skip it when the
 		// filterable values didn't actually change (the common reindex case).
-		const unchanged =
-			arraysEqual(this.relationTypes, relationTypes) && arraysEqual(this.companies, companies);
-		this.relationTypes = relationTypes;
-		this.companies = companies;
+		const unchanged = arraysEqual(this.properties, properties);
+		this.properties = properties;
 		if (!unchanged) this.render();
 	}
 
@@ -128,7 +137,7 @@ export class FilterPanel {
 	}
 
 	private resetToDefaults(): void {
-		this.filter = { ...this.defaultFilter };
+		this.filter = { ...this.defaultFilter, propertyFilters: [...this.defaultFilter.propertyFilters] };
 		this.forces = { ...this.defaultForces };
 		this.display = { ...this.defaultDisplay };
 		this.emitChange();
@@ -138,7 +147,7 @@ export class FilterPanel {
 	}
 
 	private emitChange(): void {
-		this.onChange({ ...this.filter });
+		this.onChange({ ...this.filter, propertyFilters: this.filter.propertyFilters.map((rule) => ({ ...rule })) });
 	}
 
 	private emitDisplayChange(): void {
@@ -147,18 +156,6 @@ export class FilterPanel {
 
 	private emitForcesChange(): void {
 		this.onForcesChange({ ...this.forces });
-	}
-
-	private isAllowed(set: Set<string> | null, value: string): boolean {
-		return set === null || set.has(value);
-	}
-
-	/** null means "no filter" (everything allowed); we collapse back to null once nothing is excluded. */
-	private toggleValue(current: Set<string> | null, allValues: string[], value: string, checked: boolean): Set<string> | null {
-		const next = current === null ? new Set(allValues) : new Set(current);
-		if (checked) next.add(value);
-		else next.delete(value);
-		return next.size === allValues.length ? null : next;
 	}
 
 	private renderSection(
@@ -230,37 +227,45 @@ export class FilterPanel {
 					}),
 			).settingEl.addClass("mod-search-setting");
 
-			if (this.relationTypes.length > 0) {
-				new Setting(content).setName(t("panel.relationHeading")).setHeading();
-				for (const relationType of this.relationTypes) {
-					new Setting(content).setName(relationType).addToggle((toggle) =>
-						toggle.setValue(this.isAllowed(this.filter.relationTypes, relationType)).onChange((value) => {
-							this.filter.relationTypes = this.toggleValue(
-								this.filter.relationTypes,
-								this.relationTypes,
-								relationType,
-								value,
-							);
-							this.emitChange();
-						}),
-					);
-				}
-			}
-
-			if (this.companies.length > 0) {
-				new Setting(content).setName(t("panel.companyHeading")).setHeading();
-				for (const company of this.companies) {
-					new Setting(content).setName(company).addToggle((toggle) =>
-						toggle.setValue(this.isAllowed(this.filter.companies, company)).onChange((value) => {
-							this.filter.companies = this.toggleValue(this.filter.companies, this.companies, company, value);
-							this.emitChange();
-						}),
-					);
-				}
-			}
+			const filterToolbar = content.createDiv({ cls: "person-network-property-filter-toolbar" });
+			if (this.filter.propertyFilters.length > 1) {
+				const mode = filterToolbar.createEl("select", { cls: "dropdown" });
+				mode.createEl("option", { text: t("panel.matchAll"), value: "all" });
+				mode.createEl("option", { text: t("panel.matchAny"), value: "any" });
+				mode.value = this.filter.propertyFilterMode;
+				mode.addEventListener("change", () => {
+					this.filter.propertyFilterMode = mode.value === "any" ? "any" : "all";
+					this.emitChange();
+					this.render();
+				});
+			} else filterToolbar.createSpan({ cls: "person-network-property-filter-title", text: t("panel.propertyFiltersHeading") });
+			const add = filterToolbar.createEl("button", { cls: "person-network-property-filter-add mod-cta", attr: { type: "button" } });
+			const addIcon = add.createSpan();
+			setIcon(addIcon, "plus");
+			add.createSpan({ text: t("panel.addPropertyFilter") });
+			add.addEventListener("click", () => {
+				this.filter.propertyFilters.push({
+					id: `property:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 7)}`,
+					property: this.properties[0] ?? "",
+					operator: "equals",
+					value: "",
+				});
+				this.emitChange();
+				this.render();
+			});
+			for (const rule of this.filter.propertyFilters) this.renderPropertyFilter(content, rule);
 		});
 
 		this.renderSection(this.sectionsHost, "panel.displayHeading", false, (content) => {
+			new Setting(content).setName(t("settings.layoutModel.name")).addDropdown((dropdown) => dropdown
+				.addOption("orbital", t("settings.layoutModel.orbital"))
+				.addOption("spatial", t("settings.layoutModel.spatial"))
+				.setValue(this.layoutModel)
+				.onChange((value) => {
+					this.layoutModel = value === "spatial" ? "spatial" : "orbital";
+					this.onLayoutModelChange(this.layoutModel);
+					this.render();
+				}));
 			this.toggleRow(content, "panel.showEdges", this.filter.showEdges, (value) => {
 				this.filter.showEdges = value;
 				this.emitChange();
@@ -269,6 +274,12 @@ export class FilterPanel {
 				this.filter.showGhosts = value;
 				this.emitChange();
 			});
+			if (this.layoutModel === "orbital") {
+				this.toggleRow(content, "panel.rotateOrbits", this.display.rotateOrbits, (value) => {
+					this.display.rotateOrbits = value;
+					this.emitDisplayChange();
+				});
+			}
 			this.sliderRow(content, "panel.nodeSize", { min: 0.5, max: 1.8, step: 0.1 }, this.display.nodeScale, (value) => {
 				this.display.nodeScale = value;
 				this.emitDisplayChange();
@@ -279,27 +290,40 @@ export class FilterPanel {
 			});
 		});
 
-		this.renderSection(this.sectionsHost, "panel.forcesHeading", true, (content) => {
-			this.sliderRow(content, "panel.repulsion", { min: 400, max: 6000, step: 100 }, this.forces.repulsionStrength, (value) => {
-				this.forces.repulsionStrength = value;
-				this.emitForcesChange();
-			});
-			this.sliderRow(content, "panel.linkStrength", { min: 0, max: 1, step: 0.05 }, this.forces.linkStrength, (value) => {
-				this.forces.linkStrength = value;
-				this.emitForcesChange();
-			});
-			this.sliderRow(content, "panel.linkDistance", { min: 40, max: 260, step: 5 }, this.forces.linkDistance, (value) => {
-				this.forces.linkDistance = value;
-				this.emitForcesChange();
-			});
-			this.sliderRow(content, "panel.centerStrength", { min: 0, max: 0.2, step: 0.01 }, this.forces.centerStrength, (value) => {
-				this.forces.centerStrength = value;
-				this.emitForcesChange();
-			});
-			this.sliderRow(content, "panel.companyStrength", { min: 0, max: 0.15, step: 0.01 }, this.forces.companyStrength, (value) => {
-				this.forces.companyStrength = value;
-				this.emitForcesChange();
-			});
+	}
+
+	private renderPropertyFilter(content: HTMLElement, rule: PropertyFilterRule): void {
+		const card = content.createDiv({ cls: "person-network-property-filter" });
+		const top = card.createDiv({ cls: "person-network-property-filter-top" });
+		const property = top.createEl("select", { cls: "dropdown person-network-property-filter-property" });
+		if (this.properties.length === 0) property.createEl("option", { text: t("panel.propertyPlaceholder"), value: "" });
+		for (const name of this.properties) property.createEl("option", { text: name, value: name });
+		property.value = rule.property;
+		property.addEventListener("change", () => { rule.property = property.value; this.emitChange(); });
+		const remove = top.createEl("button", { cls: "clickable-icon", attr: { type: "button", "aria-label": t("common.remove") } });
+		setIcon(remove, "trash");
+		remove.addEventListener("click", () => {
+			this.filter.propertyFilters = this.filter.propertyFilters.filter((candidate) => candidate.id !== rule.id);
+			this.emitChange();
+			this.render();
 		});
+
+		const expression = card.createDiv({ cls: "person-network-property-filter-expression" });
+		const operators: PropertyFilterOperator[] = ["equals", "notEquals", "contains", "notContains", "greater", "less", "exists", "notExists"];
+		const operator = expression.createEl("select", { cls: "dropdown" });
+		for (const name of operators) operator.createEl("option", { text: t(`panel.operator.${name}`), value: name });
+		operator.value = rule.operator;
+		operator.addEventListener("change", () => {
+			rule.operator = operator.value as PropertyFilterOperator;
+			this.emitChange();
+			this.render();
+		});
+		if (rule.operator !== "exists" && rule.operator !== "notExists") {
+			const value = expression.createEl("input", { type: "text", placeholder: t("panel.valuePlaceholder"), value: rule.value });
+			value.addEventListener("input", () => {
+				rule.value = value.value;
+				this.emitChange();
+			});
+		}
 	}
 }

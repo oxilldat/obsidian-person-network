@@ -11,6 +11,7 @@ import { ghostTooltipLines, personTooltipLines, wireGraphInteraction } from "./g
 import { Tooltip } from "./tooltip";
 import { LayerPanel } from "./layer-panel";
 import { resolveLayerMembers } from "../layers/membership";
+import { readLayerIdentifiers } from "../layers/membership";
 import { debounced } from "../utils/debounce";
 
 export const VIEW_TYPE_PERSON_NETWORK = "person-network-view";
@@ -61,16 +62,19 @@ export class PersonNetworkView extends ItemView {
 			this.renderer?.setLayers(layerScope.layers);
 			void this.plugin.saveGraphState();
 		}, (open) => { if (open) this.filterPanel?.close(); });
+		this.layerPanel.setVisible(this.plugin.settings.layoutModel === "spatial");
 		const saved = this.plugin.settings.graphState;
 		if (saved) {
 			this.renderer.filter = {
 				search: saved.search,
 				relationTypes: saved.relationTypes ? new Set(saved.relationTypes) : null,
 				companies: saved.companies ? new Set(saved.companies) : null,
+				propertyFilters: saved.propertyFilters ?? [],
+				propertyFilterMode: saved.propertyFilterMode ?? "all",
 				showEdges: saved.showEdges,
 				showGhosts: saved.showGhosts,
 			};
-			this.renderer.setDisplay({ nodeScale: saved.nodeScale, edgeWidth: saved.edgeWidth });
+			this.renderer.setDisplay({ nodeScale: saved.nodeScale, edgeWidth: saved.edgeWidth, rotateOrbits: saved.rotateOrbits ?? true });
 			this.renderer.setForces({ linkDistance: saved.linkDistance, repulsionStrength: saved.repulsionStrength, linkStrength: saved.linkStrength, centerStrength: saved.centerStrength, companyStrength: saved.companyStrength ?? 0.04 });
 			if (saved.camera) this.renderer.restoreCamera(saved.camera);
 		}
@@ -79,8 +83,14 @@ export class PersonNetworkView extends ItemView {
 			initialFilter: this.renderer.filter,
 			initialForces: this.renderer.getForces(),
 			initialDisplay: this.renderer.getDisplay(),
-			relationTypes: [],
-			companies: [],
+			properties: [],
+			initialLayoutModel: this.plugin.settings.layoutModel,
+			onLayoutModelChange: (model) => {
+				this.plugin.settings.layoutModel = model;
+				this.layerPanel?.setVisible(model === "spatial");
+				void this.plugin.saveSettings();
+				this.dataStore?.reindex();
+			},
 			onChange: (filter) => this.applyFilter(filter),
 			onForcesChange: (forces) => { this.renderer?.setForces(forces); this.persistState(); },
 			onDisplayChange: (display) => { this.renderer?.setDisplay(display); this.persistState(); },
@@ -93,7 +103,7 @@ export class PersonNetworkView extends ItemView {
 				handleNodeClick(this.app, this.plugin.settings, id, this.peopleById, this.ghostsById),
 			onNodeContextMenu: (id, event) => {
 				const person = id === CENTER_NODE_ID
-					? [...this.peopleById.values()].find((candidate) => candidate.isSelf)
+					? this.peopleById.get(this.plugin.settings.selfNotePath)
 					: this.peopleById.get(id);
 				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
 					await this.plugin.saveSettings();
@@ -104,8 +114,14 @@ export class PersonNetworkView extends ItemView {
 			},
 			onViewChanged: () => this.persistState(),
 			getTooltipLines: (id) => {
-				const person = this.peopleById.get(id);
-				if (person) return personTooltipLines(person);
+				const person = id === CENTER_NODE_ID
+					? this.peopleById.get(this.plugin.settings.selfNotePath)
+					: this.peopleById.get(id);
+				if (person) {
+					const frontmatter = this.app.metadataCache.getFileCache(person.file)?.frontmatter;
+					const identifiers = new Set(readLayerIdentifiers(frontmatter?.[this.plugin.settings.layerField]));
+					return personTooltipLines(person, layerScope.layers.filter((layer) => identifiers.has(layer.identifier)));
+				}
 				const ghost = this.ghostsById.get(id);
 				if (ghost) return ghostTooltipLines(ghost);
 				return null;
@@ -137,6 +153,7 @@ export class PersonNetworkView extends ItemView {
 		const layerScope = this.plugin.getLayerScope("standalone", t("view.displayName"));
 		this.renderer?.setLayers(layerScope.layers);
 		this.layerPanel?.update(layerScope.layers);
+		this.layerPanel?.setVisible(this.plugin.settings.layoutModel === "spatial");
 		this.dataStore?.reindex();
 		this.renderer?.requestRedraw();
 	}
@@ -149,13 +166,8 @@ export class PersonNetworkView extends ItemView {
 		this.renderer?.setLayers(layerScope.layers, resolveLayerMembers(this.app, snapshot.people, layerScope.layers, this.plugin.settings.layerField));
 		this.renderer?.setGraph(snapshot);
 
-		const relationTypes = [
-			...new Set(snapshot.people.map((person) => person.relationType).filter((v): v is string => !!v)),
-		].sort();
-		const companies = [
-			...new Set(snapshot.people.map((person) => person.company).filter((v): v is string => !!v)),
-		].sort();
-		this.filterPanel?.updateAvailable(relationTypes, companies);
+		const properties = [...new Set(snapshot.people.flatMap((person) => Object.keys(person.properties ?? {})))].sort();
+		this.filterPanel?.updateAvailable(properties);
 
 		this.renderEmptyState(snapshot.people.length === 0);
 		this.showDiagnostics(snapshot);
@@ -163,7 +175,6 @@ export class PersonNetworkView extends ItemView {
 
 	private showDiagnostics(snapshot: GraphSnapshot): void {
 		const messages: string[] = [];
-		if (snapshot.diagnostics.multipleSelf.length > 1) messages.push(t("warning.multipleSelf", { value: snapshot.diagnostics.multipleSelf.join(", ") }));
 		if (snapshot.diagnostics.duplicateNames.length) messages.push(t("warning.duplicateNames", { value: snapshot.diagnostics.duplicateNames.join(", ") }));
 		if (snapshot.diagnostics.unknownRoles.length) messages.push(t("warning.unknownRoles", { value: snapshot.diagnostics.unknownRoles.join(", ") }));
 		const signature = messages.join("\n");
@@ -208,8 +219,10 @@ export class PersonNetworkView extends ItemView {
 		const forces = this.renderer.getForces();
 		this.plugin.settings.graphState = {
 			search: filter.search,
-			relationTypes: filter.relationTypes ? [...filter.relationTypes] : null,
-			companies: filter.companies ? [...filter.companies] : null,
+			relationTypes: null,
+			companies: null,
+			propertyFilters: filter.propertyFilters.map((rule) => ({ ...rule })),
+			propertyFilterMode: filter.propertyFilterMode,
 			showEdges: filter.showEdges,
 			showGhosts: filter.showGhosts,
 			...display,

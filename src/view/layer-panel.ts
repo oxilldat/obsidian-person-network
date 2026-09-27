@@ -1,4 +1,4 @@
-import { setIcon } from "obsidian";
+import { Notice, setIcon } from "obsidian";
 import type { GraphLayer } from "../data/types";
 import { t } from "../i18n";
 
@@ -48,6 +48,16 @@ export class LayerPanel {
 		this.setOpen(false);
 	}
 
+	setVisible(visible: boolean): void {
+		if (visible) {
+			const active = [...this.layers].filter((layer) => layer.showArea).sort((a, b) => b.priority - a.priority);
+			for (const layer of active.slice(2)) layer.showArea = false;
+			this.render();
+		}
+		this.rootEl.toggleClass("is-hidden", !visible);
+		if (!visible) this.setOpen(false);
+	}
+
 	private setOpen(open: boolean): void {
 		this.rootEl.toggleClass("is-close", !open);
 		this.onOpenChange?.(open);
@@ -61,11 +71,14 @@ export class LayerPanel {
 		}
 		for (const layer of [...this.layers].sort((a, b) => b.priority - a.priority)) {
 			const row = this.listEl.createDiv({ cls: "person-network-layer-row" });
-			const icon = row.createSpan({ cls: "person-network-layer-row-icon" });
-			setIcon(icon, layer.icon || "layers");
 			row.createSpan({ cls: "person-network-layer-row-name", text: layer.name });
 			this.addToggle(row, layer.showArea ? "eye" : "eye-off", t("layers.toggleArea"), layer.showArea, (value) => {
+				if (value && this.layers.filter((candidate) => candidate.showArea).length >= 2) {
+					new Notice(t("layers.limitNotice"));
+					return false;
+				}
 				layer.showArea = value;
+				return true;
 			});
 			this.addToggle(row, layer.showMembers ? "user" : "user-x", t("layers.toggleMembers"), layer.showMembers, (value) => {
 				layer.showMembers = value;
@@ -78,7 +91,7 @@ export class LayerPanel {
 		iconName: string,
 		label: string,
 		value: boolean,
-		setValue: (value: boolean) => void,
+		setValue: (value: boolean) => boolean | void,
 	): void {
 		const button = row.createEl("button", {
 			cls: `clickable-icon person-network-layer-toggle${value ? " is-active" : ""}`,
@@ -86,7 +99,7 @@ export class LayerPanel {
 		});
 		setIcon(button, iconName);
 		button.addEventListener("click", () => {
-			setValue(!value);
+			if (setValue(!value) === false) return;
 			this.onChange(this.layers);
 			this.render();
 		});

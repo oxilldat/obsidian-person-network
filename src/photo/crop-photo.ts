@@ -11,6 +11,9 @@ class PhotoCropModal extends Modal {
 	private offsetX = 0;
 	private offsetY = 0;
 	private dragging = false;
+	private openGeneration = 0;
+	private saving = false;
+	private saveButton: HTMLButtonElement | null = null;
 	private lastPointer = { x: 0, y: 0 };
 
 	constructor(
@@ -24,13 +27,24 @@ class PhotoCropModal extends Modal {
 	}
 
 	override async onOpen(): Promise<void> {
+		const generation = ++this.openGeneration;
 		this.modalEl.addClass("person-network-crop-modal");
 		this.titleEl.setText(t("photo.editorTitle"));
 		this.contentEl.createEl("p", { cls: "person-network-crop-hint", text: t("photo.editorHint") });
 		try {
-			this.bitmap = await createImageBitmap(new Blob([await this.app.vault.readBinary(this.file)]));
+			const buffer = await this.app.vault.readBinary(this.file);
+			if (generation !== this.openGeneration) return;
+			const bitmap = await this.modalEl.win.createImageBitmap(new Blob([buffer]));
+			if (generation !== this.openGeneration) {
+				bitmap.close();
+				return;
+			}
+			this.bitmap = bitmap;
 		} catch {
-			this.close();
+			if (generation === this.openGeneration) {
+				new Notice(t("photo.cropFailed"));
+				this.close();
+			}
 			return;
 		}
 
@@ -59,13 +73,15 @@ class PhotoCropModal extends Modal {
 		const finishDrag = (): void => { this.dragging = false; };
 		this.canvas.addEventListener("pointerup", finishDrag);
 		this.canvas.addEventListener("pointercancel", finishDrag);
+		this.canvas.addEventListener("lostpointercapture", finishDrag);
 
 		new Setting(this.contentEl).setName(t("photo.zoom")).addSlider((slider) => slider
 			.setLimits(1, 4, 0.05).setValue(this.zoom).onChange((value) => this.setZoom(value)));
 
 		const buttons = this.contentEl.createDiv({ cls: "person-network-modal-buttons" });
 		buttons.createEl("button", { text: t("common.cancel") }).addEventListener("click", () => this.close());
-		buttons.createEl("button", { text: t("photo.saveCrop"), cls: "mod-cta" }).addEventListener("click", () => void this.save());
+		this.saveButton = buttons.createEl("button", { text: t("photo.saveCrop"), cls: "mod-cta" });
+		this.saveButton.addEventListener("click", () => void this.save());
 	}
 
 	private baseScale(): number {
@@ -114,7 +130,9 @@ class PhotoCropModal extends Modal {
 	}
 
 	private async save(): Promise<void> {
-		if (!this.bitmap) return;
+		if (!this.bitmap || this.saving) return;
+		this.saving = true;
+		if (this.saveButton) this.saveButton.disabled = true;
 		try {
 			const scale = this.baseScale() * this.zoom;
 			await this.onSaved({
@@ -125,12 +143,19 @@ class PhotoCropModal extends Modal {
 			this.close();
 		} catch {
 			new Notice(t("photo.cropFailed"));
+		} finally {
+			this.saving = false;
+			if (this.saveButton) this.saveButton.disabled = false;
 		}
 	}
 
 	override onClose(): void {
+		this.openGeneration += 1;
+		this.dragging = false;
 		this.bitmap?.close();
 		this.bitmap = null;
+		this.canvas = null;
+		this.saveButton = null;
 		this.contentEl.empty();
 	}
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildContactLinks } from "../src/data/graph-links";
 import type { PersonNode } from "../src/data/types";
+import { connectedNodeIds, pickCompany } from "../src/render/picking";
 
 function person(id: string, displayName: string, ghostRefs: string[] = []): PersonNode {
 	return {
@@ -8,12 +9,26 @@ function person(id: string, displayName: string, ghostRefs: string[] = []): Pers
 		file: {} as never,
 		displayName,
 		positionScore: 5,
-		isSelf: false,
 		ghostRefs,
 	};
 }
 
 describe("buildContactLinks", () => {
+	it("collects only the hovered person and their direct connections", () => {
+		const links = [
+			{ source: { id: "a" }, target: { id: "b" } },
+			{ source: { id: "c" }, target: { id: "a" } },
+			{ source: { id: "b" }, target: { id: "d" } },
+		];
+		expect([...connectedNodeIds(links, "a")].sort()).toEqual(["a", "b", "c"]);
+	});
+
+	it("detects the company label independently from the person card", () => {
+		const areas = [{ company: "Acme", x: 10, y: 20, width: 80, height: 14 }];
+		expect(pickCompany(areas, 50, 25)).toBe("Acme");
+		expect(pickCompany(areas, 50, 10)).toBeUndefined();
+	});
+
 	it("creates an edge when a contact name matches another person", () => {
 		const people = [person("a.md", "Alice", ["Bob"]), person("b.md", "Bob")];
 		const { edges, ghosts } = buildContactLinks(people);

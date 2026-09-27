@@ -1,4 +1,5 @@
 import type { PluginSettings, RingStyle } from "../data/types";
+import { resolveRole } from "../data/parser";
 import type { ThemeColorCache } from "./theme-colors";
 
 const VAR_TOKEN = /^var\((--[\w-]+)\)$/;
@@ -16,6 +17,6 @@ export function resolveRelationStyle(
 	settings: PluginSettings,
 	themeColors: ThemeColorCache,
 ): { color: string; ringStyle: RingStyle } {
-	const role = (relationType && settings.roles[relationType]) || settings.defaultRole;
+	const role = resolveRole(relationType, settings);
 	return { color: resolveColorToken(role.color, themeColors), ringStyle: role.ringStyle };
 }

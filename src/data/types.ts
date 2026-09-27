@@ -8,8 +8,17 @@ export interface PersonNode {
 	relationType?: string; // single free-form field naming a role from settings.roles, e.g. "friend"
 	company?: string;
 	positionScore: number; // 1-10, resolved from the matched role — purely radial placement
-	isSelf: boolean;
 	ghostRefs: string[]; // plain-string names this person lists as not-yet-documented contacts
+	properties?: Record<string, unknown>; // frontmatter used by the Bases-like filter builder
+}
+
+export type PropertyFilterOperator = "equals" | "notEquals" | "contains" | "notContains" | "greater" | "less" | "exists" | "notExists";
+
+export interface PropertyFilterRule {
+	id: string;
+	property: string;
+	operator: PropertyFilterOperator;
+	value: string;
 }
 
 export interface GhostNode {
@@ -24,6 +33,7 @@ export interface GraphEdge {
 }
 
 export type RingStyle = "solid" | "dashed" | "dotted";
+export type LayoutModel = "orbital" | "spatial";
 
 /** A user-defined role (e.g. "friend"): ring appearance plus how far it orbits the center. */
 export interface PersonRole {
@@ -36,11 +46,8 @@ export interface GraphLayer {
 	id: string;
 	name: string;
 	identifier: string;
-	icon: string;
 	color: string;
 	priority: number;
-	showLabel: boolean;
-	showIcon: boolean;
 	showArea: boolean;
 	showMembers: boolean;
 }
@@ -67,6 +74,8 @@ export interface PluginSettings {
 
 	// General
 	centerLabel: string;
+	selfNotePath: string;
+	layoutModel: LayoutModel;
 	/** Registers the graph as a Bases view type; applied on plugin (re)load. */
 	enableBases: boolean;
 
@@ -84,10 +93,13 @@ export interface PersistedGraphState {
 	search: string;
 	relationTypes: string[] | null;
 	companies: string[] | null;
+	propertyFilters?: PropertyFilterRule[];
+	propertyFilterMode?: "all" | "any";
 	showEdges: boolean;
 	showGhosts: boolean;
 	nodeScale: number;
 	edgeWidth: number;
+	rotateOrbits?: boolean;
 	linkDistance: number;
 	repulsionStrength: number;
 	linkStrength: number;

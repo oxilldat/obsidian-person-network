@@ -4,6 +4,7 @@ import { buildBasesOptions } from "./bases/options";
 import type { GraphLayerScope, PluginSettings } from "./data/types";
 import { setLocale, t } from "./i18n";
 import { DEFAULT_SETTINGS } from "./settings/defaults";
+import { normalizeSettings, renameSettingsPaths } from "./settings/normalize";
 import { PersonNetworkSettingTab } from "./settings/settings-tab";
 import { debounced } from "./utils/debounce";
 import { PersonNetworkView, VIEW_TYPE_PERSON_NETWORK } from "./view/graph-view";
@@ -50,21 +51,15 @@ export default class PersonNetworkPlugin extends Plugin {
 			name: t("view.openCommand"),
 			callback: () => void this.activateView(),
 		});
+
+		this.registerEvent(this.app.vault.on("rename", (_file, oldPath) => {
+			const newPath = _file.path;
+			if (renameSettingsPaths(this.settings, oldPath, newPath)) void this.saveSettings();
+		}));
 	}
 
 	async loadSettings(): Promise<void> {
-		const data = (await this.loadData()) as Partial<PluginSettings> | null;
-		const defaults = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as PluginSettings;
-		if (data) {
-			// Copy only known keys so stale fields from older plugin versions
-			// don't linger in memory (and get dropped on the next save).
-			const target = defaults as unknown as Record<string, unknown>;
-			const source = data as unknown as Record<string, unknown>;
-			for (const key of Object.keys(defaults)) {
-				if (source[key] !== undefined) target[key] = source[key];
-			}
-		}
-		this.settings = defaults;
+		this.settings = normalizeSettings(await this.loadData());
 		for (const scope of Object.values(this.settings.layerScopes ?? {})) {
 			for (const layer of scope.layers) this.migrateLayer(layer);
 		}
@@ -89,8 +84,6 @@ export default class PersonNetworkPlugin extends Plugin {
 				this.migrateLayer(layer);
 				layer.showArea ??= true;
 				layer.showMembers ??= true;
-				layer.showLabel ??= true;
-				layer.showIcon ??= true;
 			}
 			return existing;
 		}
@@ -101,13 +94,19 @@ export default class PersonNetworkPlugin extends Plugin {
 	}
 
 	private migrateLayer(layer: GraphLayerScope["layers"][number]): void {
-		const legacy = layer as GraphLayerScope["layers"][number] & { frontmatterField?: string };
+		const legacy = layer as GraphLayerScope["layers"][number] & {
+			frontmatterField?: string;
+			icon?: string;
+			showLabel?: boolean;
+			showIcon?: boolean;
+		};
 		layer.identifier ||= legacy.frontmatterField || layer.name.trim().toLowerCase().replace(/\s+/g, "-") || layer.id;
 		delete legacy.frontmatterField;
 		layer.showArea ??= true;
 		layer.showMembers ??= true;
-		layer.showLabel ??= true;
-		layer.showIcon ??= true;
+		delete legacy.icon;
+		delete legacy.showLabel;
+		delete legacy.showIcon;
 	}
 
 	registerSettingsListener(listener: () => void): () => void {

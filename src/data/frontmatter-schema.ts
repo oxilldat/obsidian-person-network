@@ -1,7 +1,6 @@
 /** Fixed (non-configurable) frontmatter keys — kept minimal on purpose. */
 export const FIXED_FIELDS = {
 	company: "company",
-	isSelf: "is_self",
 } as const;
 
 /** Default values for the configurable field-name settings. */
