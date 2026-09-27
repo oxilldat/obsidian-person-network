@@ -239,9 +239,13 @@ export class CanvasRenderer {
 	setLayers(layers: GraphLayer[], members?: Record<string, string[]>): void {
 		this.layers = layers;
 		if (members) this.layerMembers = members;
-		this.hiddenMemberIds = new Set(layers
-			.filter((layer) => !layer.showMembers)
-			.flatMap((layer) => this.layerMembers[layer.id] ?? []));
+		const hiddenMemberIds = new Set<string>();
+		for (const layer of layers) {
+			if (!layer.showMembers) {
+				for (const id of this.layerMembers[layer.id] ?? []) hiddenMemberIds.add(id);
+			}
+		}
+		this.hiddenMemberIds = hiddenMemberIds;
 		this.syncLayerMembership();
 		this.requestRedraw();
 	}
@@ -879,7 +883,8 @@ export class CanvasRenderer {
 		const key = `${path}|${centerXRatio}|${centerYRatio}|${zoom}|${desiredSize}`;
 		const cached = this.portraitCache.get(key);
 		if (cached) return cached;
-		const portrait = this.container.ownerDocument.createElement("canvas");
+		const portrait = this.container.createEl("canvas");
+		portrait.remove();
 		portrait.width = desiredSize;
 		portrait.height = desiredSize;
 		const context = portrait.getContext("2d");
@@ -895,9 +900,9 @@ export class CanvasRenderer {
 		// Camera zoom can create several resolutions of the same crop. Keep the
 		// cache bounded so long sessions do not accumulate canvases indefinitely.
 		while (this.portraitCache.size > 96) {
-			const oldest = this.portraitCache.keys().next().value as string | undefined;
-			if (oldest === undefined) break;
-			this.portraitCache.delete(oldest);
+			const oldest = this.portraitCache.keys().next();
+			if (oldest.done) break;
+			this.portraitCache.delete(oldest.value);
 		}
 		return portrait;
 	}

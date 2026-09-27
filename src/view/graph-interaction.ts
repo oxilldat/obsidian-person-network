@@ -110,7 +110,7 @@ export function wireGraphInteraction(
 			const hitId = company ? undefined : renderer.pick(pos.x, pos.y);
 			hoveredHitId = hitId;
 			renderer.setHover(hitId ?? null, company ?? null);
-			canvas.style.cursor = company || (hitId && hitId !== CENTER_NODE_ID) ? "pointer" : "default";
+			canvas.toggleClass("is-interactive", Boolean(company || (hitId && hitId !== CENTER_NODE_ID)));
 			if (shiftPressed || event.shiftKey) tooltip.hide();
 			else updateTooltip(hitId, pos);
 		}
@@ -182,6 +182,6 @@ export function wireGraphInteraction(
 		hoveredHitId = undefined;
 		tooltip.hide();
 		renderer.setHover(null, null);
-		canvas.style.cursor = "default";
+		canvas.removeClass("is-interactive");
 	});
 }

@@ -58,13 +58,16 @@ export function showNodeContextMenu(
 		menu.addSeparator();
 		menu.addItem((item) => item.setTitle(t("layers.assignHeading")).setIsLabel(true));
 		for (const layer of [...layers].sort((a, b) => b.priority - a.priority)) {
-			const frontmatter = app.metadataCache.getFileCache(person.file)?.frontmatter;
-			const assigned = readLayerIdentifiers(frontmatter?.[settings.layerField]).includes(layer.identifier);
+			const rawFrontmatter: unknown = app.metadataCache.getFileCache(person.file)?.frontmatter;
+			const frontmatter = rawFrontmatter !== null && typeof rawFrontmatter === "object" && !Array.isArray(rawFrontmatter)
+				? rawFrontmatter as Record<string, unknown>
+				: {};
+			const assigned = readLayerIdentifiers(frontmatter[settings.layerField]).includes(layer.identifier);
 			menu.addItem((item) => item
 				.setTitle(layer.name)
 				.setChecked(assigned)
 				.onClick(() => {
-					void app.fileManager.processFrontMatter(person.file, (fm) => {
+					void app.fileManager.processFrontMatter(person.file, (fm: Record<string, unknown>) => {
 						const identifiers = readLayerIdentifiers(fm[settings.layerField]);
 						const next = assigned
 							? identifiers.filter((identifier) => identifier !== layer.identifier)

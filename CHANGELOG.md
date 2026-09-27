@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1
+
+- Fixed Obsidian review errors by using native setting headings and CSS classes for cursor state.
+- Added the required English README and kept the Russian translation in `README.ru.md`.
+- Hardened frontmatter and saved-settings parsing to avoid unsafe values crossing typed boundaries.
+- Replaced direct DOM and SVG creation with Obsidian helpers.
+
 ## 1.3.0
 
 - Added two distinct graph layouts: a rotating planetary orbit model and a spatial model with dynamic Euler circles for groups.

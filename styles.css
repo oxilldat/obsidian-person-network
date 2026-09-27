@@ -35,6 +35,8 @@
 	cursor: default;
 }
 
+.person-network-canvas.is-interactive { cursor: pointer; }
+
 .person-network-empty {
 	position: absolute;
 	right: 16px;

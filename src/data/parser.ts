@@ -4,6 +4,12 @@ import type { PersonNode, PersonRole, PluginSettings } from "./types";
 
 type Frontmatter = Record<string, unknown>;
 
+function frontmatterRecord(value: unknown): Frontmatter {
+	return value !== null && typeof value === "object" && !Array.isArray(value)
+		? value as Frontmatter
+		: {};
+}
+
 export function isExcluded(filePath: string, excludePaths: string): boolean {
 	const path = filePath.toLowerCase();
 	const list = excludePaths
@@ -71,8 +77,12 @@ export function parsePerson(
 ): PersonNode | null {
 	if (!matchesPersonTag(cache, settings.personTag)) return null;
 
-	const fm: Frontmatter = cache?.frontmatter ?? {};
-	const properties = Object.fromEntries(Object.entries(fm).filter(([key]) => key !== "position"));
+	const rawFrontmatter: unknown = cache?.frontmatter;
+	const fm = frontmatterRecord(rawFrontmatter);
+	const properties: Frontmatter = {};
+	for (const key of Object.keys(fm)) {
+		if (key !== "position") properties[key] = fm[key];
+	}
 
 	const rawName = fm[settings.nameField];
 	const normalizedName = typeof rawName === "string" ? rawName.trim() : "";

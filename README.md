@@ -1,97 +1,99 @@
 # Person Network
 
-Person Network превращает заметки о людях в интерактивную карту связей Obsidian. Плагин работает локально, читает данные из frontmatter и может открываться как отдельный граф или как представление внутри Bases.
+Person Network turns notes about people into an interactive relationship map in Obsidian. It works locally, reads data from frontmatter, and can be opened as a standalone graph or as a custom view inside Bases.
 
-![Граф Person Network](image/graph-overview.gif)
+[Русская версия](README.ru.md)
 
-## Возможности
+![Person Network graph](image/graph-overview.gif)
 
-- Два способа отображения: вращающиеся орбиты и свободное пространство с кругами групп.
-- Фотографии, имена, компании, роли, связи и потенциальные контакты.
-- Выбор личной заметки в настройках без специального поля во frontmatter.
-- Фильтрация по любым свойствам заметок с условиями «все» или «любое».
-- Независимые наборы групп для обычного графа и каждого представления Bases.
-- Плавное выделение связей человека или сотрудников одной компании при наведении.
-- Неразрушающая настройка видимой области фотографии: исходный файл не изменяется.
-- Автоматическое сохранение фильтров, масштаба, положения камеры и параметров отображения.
-- Экспорт текущего графа в PNG.
-- Русский и английский интерфейс в зависимости от языка Obsidian.
+## Features
 
-## Установка
+- Two layouts: rotating planetary orbits and a free spatial layout with group circles.
+- Photos, names, companies, roles, connections, and potential contacts.
+- A personal note selected in the plugin settings, with no special frontmatter flag required.
+- Filters for any frontmatter property with all/any matching.
+- Independent group sets for the standalone graph and every Bases view.
+- Smooth focus for a person's connections or members of the same company on hover.
+- Non-destructive photo framing that leaves the original image unchanged.
+- Automatic persistence of filters, zoom, camera position, and display options.
+- PNG export of the current graph.
+- Russian and English interface matching the Obsidian language.
 
-Установите **Person Network** через **Настройки → Сторонние плагины → Обзор**.
+## Installation
 
-Для ручной установки:
+Install **Person Network** from **Settings → Community plugins → Browse**.
 
-1. Скачайте `main.js`, `manifest.json` и `styles.css` из последнего релиза GitHub.
-2. Создайте в хранилище папку `.obsidian/plugins/person-network/`.
-3. Скопируйте в неё три файла.
-4. Включите Person Network в разделе сторонних плагинов.
+For manual installation:
 
-## Быстрый старт
+1. Download `main.js`, `manifest.json`, and `styles.css` from the latest GitHub release.
+2. Create `.obsidian/plugins/person-network/` inside your vault.
+3. Copy the three files into that folder.
+4. Enable Person Network under Community plugins.
 
-Создайте отдельную заметку для каждого человека и добавьте frontmatter:
+## Quick start
+
+Create one note per person and add frontmatter:
 
 ```yaml
 ---
 tags:
   - person
-name: Иван Петров
-photo: attachments/ivan.jpg
-company: Oxill Lab
+name: Jane Doe
+photo: attachments/jane.jpg
+company: Acme Corp
 relation: friend
 potential_contacts:
-  - Мария Соколова
-  - "[[Люди/Алексей Орлов|Алексей Орлов]]"
+  - John Smith
+  - "[[People/Kyle Reese|Kyle Reese]]"
 layers:
   - family
   - work
 ---
 ```
 
-Откройте граф кнопкой на ленте или командой **«Открыть граф людей»**. Затем выберите личную заметку в настройках плагина.
+Open the graph from the ribbon or run **Open person network** from the command palette. Then select your personal note in the plugin settings.
 
-![Свойства заметки человека](image/frontmatter.png)
+![Person note properties](image/frontmatter.png)
 
-## Данные заметки
+## Note data
 
-| Свойство | Тип | Назначение |
+| Property | Type | Purpose |
 | --- | --- | --- |
-| тег распознавания | тег | Добавляет заметку в граф. По умолчанию используется `person`. |
-| `name` | текст | Имя на карточке. Если поле пустое, используется имя файла. |
-| `photo` | текст | Путь к изображению внутри хранилища. |
-| `relation` | текст | Роль человека из настроек плагина. |
-| `company` | текст | Компания под именем человека. |
-| `potential_contacts` | список | Имена или wikilinks связанных людей. |
-| `layers` | список | Идентификаторы групп человека. |
+| recognition tag | tag | Includes the note in the graph. Default: `person`. |
+| `name` | text | Name displayed on the card. The file name is used when empty. |
+| `photo` | text | Vault-relative path to an image. |
+| `relation` | text | A role configured in the plugin settings. |
+| `company` | text | Company displayed below the person's name. |
+| `potential_contacts` | list | Names or wikilinks of connected people. |
+| `layers` | list | Group identifiers assigned to the person. |
 
-Тег распознавания и названия полей `name`, `photo`, `relation`, `potential_contacts` и `layers` можно изменить в настройках. Поле `company` имеет фиксированное название.
+The recognition tag and the `name`, `photo`, `relation`, `potential_contacts`, and `layers` property names are configurable. The `company` property name is fixed.
 
-## Способы отображения
+## Layouts
 
-### Орбита
+### Orbit
 
-Личная заметка находится в центре, а остальные люди располагаются на кольцах в соответствии с показателем роли от 1 до 10. Люди одной компании занимают соседние участки одной орбиты. Карточки равномерно вращаются вместе со своими связями; вращение можно отключить в панели **«Отображение»**.
+The personal note stays in the center. Everyone else is placed on rings according to the role position score from 1 to 10. People from the same company occupy neighboring sections of an orbit. Cards rotate with their connections; rotation can be disabled in the **Display** panel.
 
-Орбитальная модель использует фиксированную геометрию и не зависит от симуляции сил. Управление группами в этом режиме скрыто.
+The orbital layout uses fixed geometry and does not depend on force simulation. Group controls are hidden in this layout.
 
-### Пространство
+### Space
 
-Личная заметка становится обычным участником графа. Включённые группы отображаются полупрозрачными кругами Эйлера: участник одной группы остаётся внутри её круга, общий участник располагается в пересечении, а человек без отображаемой группы — снаружи кругов.
+The personal note becomes a regular graph member. Visible groups are drawn as translucent Euler circles: a member of one group remains inside that circle, a shared member stays in the intersection, and a person without a visible group remains outside all circles.
 
-Одновременно отображаются две группы с наибольшим приоритетом. Круг с одним видимым участником остаётся в списке, но не рисуется на графе.
+The two highest-priority visible groups are drawn at the same time. A group with only one visible member remains in the list but does not draw a circle.
 
-## Роли
+## Roles
 
-Роль определяет цвет и стиль обводки карточки. Для неё также задаётся показатель позиции от 1 до 10, который выбирает орбиту человека: чем выше значение, тем ближе карточка к центру.
+A role controls the card border color and style. Its position score from 1 to 10 also selects the person's orbit: a higher value places the person closer to the center.
 
-Значение поля `relation` должно совпадать с названием роли. Для неизвестного значения применяется оформление по умолчанию, а плагин показывает предупреждение.
+The `relation` value must match a configured role name. An unknown value uses the default style and produces a warning.
 
-![Настройки ролей](image/settings-roles.png)
+![Role settings](image/settings-roles.png)
 
-## Группы
+## Groups
 
-Группы настраиваются в режиме **«Пространство»**. У каждой группы есть название, уникальный идентификатор, цвет и приоритет. Участники назначаются списком идентификаторов в общем поле frontmatter:
+Groups are configured for the **Space** layout. Each group has a name, unique identifier, color, and priority. Assign members through the shared frontmatter list:
 
 ```yaml
 layers:
@@ -99,41 +101,41 @@ layers:
   - project-alpha
 ```
 
-Кнопка групп на графе открывает компактную панель. Кнопка с глазом скрывает круг, а кнопка с человеком — всех участников группы. Наборы групп независимы для обычного графа и каждого представления Bases; принадлежность людей всегда читается из общего поля frontmatter.
+The groups button opens a compact graph panel. The eye button hides the circle, while the person button hides all group members. Group definitions are independent for the standalone graph and each Bases view; membership always comes from the shared frontmatter property.
 
-## Фильтры и отображение
+## Filters and display
 
-Панель графа открывается кнопкой с шестерёнкой.
+Open the graph panel with the gear button.
 
-- **Фильтры** позволяют искать людей и создавать условия по любым свойствам frontmatter. Условия можно объединить по принципу «все» или «любое».
-- **Отображение** переключает способ размещения, линии связей и потенциальные контакты, регулирует размер карточек и толщину линий. В режиме «Орбита» здесь также включается и отключается вращение.
+- **Filters** searches people and creates conditions for any frontmatter property. Conditions can match all rules or any rule.
+- **Display** switches the layout, relationship lines, and potential contacts, and adjusts card size and line thickness. Orbit rotation is also controlled here.
 
-![Фильтры и параметры отображения](image/control-panel.gif)
+![Filters and display settings](image/control-panel.gif)
 
-При наведении на человека несвязанные карточки плавно тускнеют, а его связи остаются заметными. При наведении на название компании выделяются сотрудники этой компании. Если всплывающая карточка закрывает граф, удерживайте `Shift`.
+Hover over a person to fade unrelated cards and reveal their connections. Hover over a company name to focus people from that company. Hold `Shift` when the tooltip covers useful graph content.
 
-Двойной щелчок по свободному месту вписывает граф в окно. Колесо мыши меняет масштаб, а перетаскивание свободного пространства перемещает камеру.
+Double-click empty space to fit the graph into the view. Use the mouse wheel to zoom and drag empty space to pan.
 
-## Контакты
+## Contacts
 
-Плагин принимает в поле контактов обычные имена и wikilinks. Он учитывает пути и псевдонимы заметок. Найденный человек становится связью, а отсутствующий — потенциальным контактом.
+The contacts property accepts plain names and wikilinks. Person Network resolves note paths and aliases. A matched person becomes a connection; an unmatched name becomes a potential contact.
 
-Нажмите на потенциальный контакт, чтобы создать для него заметку. Папку и заметку-шаблон можно выбрать в настройках. В шаблоне поддерживается подстановка `{{name}}`.
+Click a potential contact to create a note. The destination folder and template note are configurable. Use `{{name}}` inside the template to insert the person's name.
 
-## Фотографии
+## Photos
 
-Нажмите правой кнопкой мыши по человеку и выберите **«Настроить обрезку фото»**. Перемещайте фотографию внутри квадрата и меняйте масштаб. Плагин сохраняет только параметры отображения в `data.json`, не изменяя и не копируя исходное изображение.
+Right-click a person and choose **Edit photo crop**. Move the photo inside the square and adjust zoom. Person Network stores only framing values in `data.json`; it does not modify or duplicate the source image.
 
-Редактор доступен и для личной заметки в центре орбитальной модели.
+The editor is also available for the personal note at the center of the orbital layout.
 
 ## Bases
 
-При включённом встроенном плагине Bases выберите **Person Network** как вид базы. Фильтры Bases определяют набор заметок, а параметры вида сопоставляют свойства имени, фотографии, роли и контактов. У каждого представления Bases собственный набор групп и сохранённое состояние графа.
+With the Bases core plugin enabled, select **Person Network** as a Bases view. Bases filters determine which notes appear, while view options map the name, photo, relation, and contacts properties. Every Bases view has its own group definitions and saved graph state.
 
-Интеграцию с Bases можно отключить в настройках Person Network. Для применения этого параметра требуется перезапуск плагина или Obsidian.
+Bases integration can be disabled in the Person Network settings. Reload the plugin or Obsidian after changing this option.
 
-![Person Network внутри Bases](image/bases-view.png)
+![Person Network in Bases](image/bases-view.png)
 
-## Конфиденциальность
+## Privacy
 
-Person Network работает локально внутри хранилища. Плагин не выполняет сетевые запросы, не требует учётной записи, не показывает рекламу и не собирает телеметрию.
+Person Network works locally inside the vault. It makes no network requests, requires no account, displays no ads, and collects no telemetry.

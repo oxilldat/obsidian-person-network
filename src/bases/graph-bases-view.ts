@@ -127,8 +127,11 @@ export class PersonNetworkBasesView extends BasesView {
 					? this.peopleById.get(this.plugin.settings.selfNotePath)
 					: this.peopleById.get(id);
 				if (person) {
-					const frontmatter = this.app.metadataCache.getFileCache(person.file)?.frontmatter;
-					const identifiers = new Set(readLayerIdentifiers(frontmatter?.[this.plugin.settings.layerField]));
+					const rawFrontmatter: unknown = this.app.metadataCache.getFileCache(person.file)?.frontmatter;
+					const frontmatter = rawFrontmatter !== null && typeof rawFrontmatter === "object" && !Array.isArray(rawFrontmatter)
+						? rawFrontmatter as Record<string, unknown>
+						: {};
+					const identifiers = new Set(readLayerIdentifiers(frontmatter[this.plugin.settings.layerField]));
 					return personTooltipLines(person, layerScope.layers.filter((layer) => identifiers.has(layer.identifier)));
 				}
 				const ghost = this.ghostsById.get(id);

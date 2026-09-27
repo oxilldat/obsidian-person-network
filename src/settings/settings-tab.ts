@@ -70,7 +70,7 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 			attr: { src: authorAvatar, alt: "oxill" },
 		});
 		const copy = top.createDiv({ cls: "person-network-author-copy" });
-		copy.createEl("h3", { text: t("settings.author.title") });
+		new Setting(copy).setName(t("settings.author.title")).setHeading();
 		copy.createEl("p", { text: t("settings.author.body") });
 
 		const links = card.createDiv({ cls: "person-network-social-links" });
@@ -87,11 +87,8 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 			cls: `person-network-social-button is-${brand}`,
 			attr: { href: url, target: "_blank", rel: "noopener noreferrer", "aria-label": label, title: label },
 		});
-		const svg = parent.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
-		svg.setAttribute("viewBox", "0 0 24 24");
-		svg.setAttribute("aria-hidden", "true");
-		const path = parent.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "path");
-		path.setAttribute("d", pathData);
+		const svg = createSvg("svg", { attr: { viewBox: "0 0 24 24", "aria-hidden": "true" } });
+		const path = createSvg("path", { attr: { d: pathData } });
 		svg.appendChild(path);
 		link.appendChild(svg);
 	}
@@ -115,8 +112,8 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 
 	private resetRolesToDefaults(): void {
 		const settings = this.plugin.settings;
-		settings.roles = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.roles)) as PluginSettings["roles"];
-		settings.defaultRole = JSON.parse(JSON.stringify(DEFAULT_SETTINGS.defaultRole)) as PluginSettings["defaultRole"];
+		settings.roles = structuredClone(DEFAULT_SETTINGS.roles);
+		settings.defaultRole = structuredClone(DEFAULT_SETTINGS.defaultRole);
 		void this.save();
 		this.display();
 	}

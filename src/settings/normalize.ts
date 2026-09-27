@@ -32,22 +32,29 @@ function stringList(value: unknown): string[] | null {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : null;
 }
 
-const FILTER_OPERATORS = new Set<PropertyFilterOperator>(["equals", "notEquals", "contains", "notContains", "greater", "less", "exists", "notExists"]);
+const FILTER_OPERATORS = new Set<string>(["equals", "notEquals", "contains", "notContains", "greater", "less", "exists", "notExists"]);
+
+function isFilterOperator(value: unknown): value is PropertyFilterOperator {
+	return typeof value === "string" && FILTER_OPERATORS.has(value);
+}
 
 function propertyFilters(value: unknown): PropertyFilterRule[] {
 	if (!Array.isArray(value)) return [];
-	return value.flatMap((raw, index) => {
+	const result: PropertyFilterRule[] = [];
+	for (let index = 0; index < value.length; index++) {
+		const raw: unknown = value[index];
 		const item = record(raw);
-		if (typeof item.property !== "string" || !FILTER_OPERATORS.has(item.operator as PropertyFilterOperator)) return [];
-		return [{ id: typeof item.id === "string" && item.id ? item.id : `filter:${index}`, property: item.property,
-			operator: item.operator as PropertyFilterOperator, value: typeof item.value === "string" ? item.value : String(item.value ?? "") }];
-	});
+		if (typeof item.property !== "string" || !isFilterOperator(item.operator)) continue;
+		result.push({ id: typeof item.id === "string" && item.id ? item.id : `filter:${index}`, property: item.property,
+			operator: item.operator, value: typeof item.value === "string" ? item.value : String(item.value ?? "") });
+	}
+	return result;
 }
 
 /** Restore known fields independently: older partial nested settings must not erase new defaults. */
 export function normalizeSettings(value: unknown): PluginSettings {
 	const source = record(value);
-	const result = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as PluginSettings;
+	const result = structuredClone(DEFAULT_SETTINGS);
 	const target = result as unknown as Record<string, unknown>;
 	for (const [key, fallback] of Object.entries(result)) {
 		if (typeof fallback === "string" && typeof source[key] === "string") target[key] = source[key];

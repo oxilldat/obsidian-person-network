@@ -166,7 +166,11 @@ export class PersonNetworkView extends ItemView {
 		this.renderer?.setLayers(layerScope.layers, resolveLayerMembers(this.app, snapshot.people, layerScope.layers, this.plugin.settings.layerField));
 		this.renderer?.setGraph(snapshot);
 
-		const properties = [...new Set(snapshot.people.flatMap((person) => Object.keys(person.properties ?? {})))].sort();
+		const propertyNames = new Set<string>();
+		for (const person of snapshot.people) {
+			for (const key of Object.keys(person.properties ?? {})) propertyNames.add(key);
+		}
+		const properties = [...propertyNames].sort();
 		this.filterPanel?.updateAvailable(properties);
 
 		this.renderEmptyState(snapshot.people.length === 0);
