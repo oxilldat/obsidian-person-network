@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.3
+
+- Fixed an empty Person Network view in Bases when Obsidian loads the component before assigning its view configuration.
+- Deferred graph initialization until both the Bases configuration and query result are available.
+
 ## 1.3.2
 
 - Removed the two-group display limit from the spatial graph.

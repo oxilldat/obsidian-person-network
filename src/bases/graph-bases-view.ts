@@ -42,12 +42,14 @@ export class PersonNetworkBasesView extends BasesView {
 	}
 
 	override onload(): void {
-		this.ensureUi();
 		// Bases may finish its initial query before the custom view component is
 		// loaded. Render the current result immediately instead of waiting for a
-		// later vault/config change to trigger onDataUpdated again.
-		if (this.data?.data) this.onDataUpdated();
+		// later vault/config change to trigger onDataUpdated again. Obsidian can
+		// also call onload before assigning config, so UI creation must wait until
+		// both values exist.
+		if (this.config && this.data?.data) this.onDataUpdated();
 		this.unregisterSettingsListener = this.plugin.registerSettingsListener(() => {
+			if (!this.config) return;
 			const scope = this.plugin.getLayerScope(this.layerScopeId, this.config.name || t("bases.viewName"));
 			this.renderer?.setLayers(scope.layers);
 			this.layerPanel?.update(scope.layers);
@@ -69,6 +71,7 @@ export class PersonNetworkBasesView extends BasesView {
 	}
 
 	override onDataUpdated(): void {
+		if (!this.config || !this.data?.data) return;
 		const renderer = this.ensureUi();
 
 		const snapshot = adaptEntries(this.app, this.data.data, this.readMapping(), this.plugin.settings);
