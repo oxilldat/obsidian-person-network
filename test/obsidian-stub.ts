@@ -2,7 +2,11 @@
 // modules use obsidian only for types (erased at build), so these exist purely
 // so any incidental runtime import resolves instead of throwing.
 
-export class Component {}
+export class Component {
+	registerEvent<T>(eventRef: T): T {
+		return eventRef;
+	}
+}
 export class TFile {}
 export class AbstractInputSuggest {}
 export function debounce<T extends (...args: never[]) => void>(fn: T): T {

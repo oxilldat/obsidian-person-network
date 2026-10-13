@@ -44,6 +44,12 @@ export class DataStore extends Component {
 		this.reindex();
 		this.registerEvent(this.app.metadataCache.on("changed", () => this.requestReindex()));
 		this.registerEvent(this.app.metadataCache.on("resolved", () => this.requestReindex()));
+		// Vault events are an important fallback for changes made by external
+		// editors or bulk tools: MetadataCache does not always emit a distinct
+		// `changed` event for every affected file, while the vault still reports
+		// the underlying create/modify operation.
+		this.registerEvent(this.app.vault.on("create", () => this.requestReindex()));
+		this.registerEvent(this.app.vault.on("modify", () => this.requestReindex()));
 		this.registerEvent(this.app.vault.on("delete", () => this.requestReindex()));
 		this.registerEvent(this.app.vault.on("rename", () => this.requestReindex()));
 	}
