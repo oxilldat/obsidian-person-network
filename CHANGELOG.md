@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.4
+
+- Fixed stale graph labels after notes are created or modified, including bulk changes made outside Obsidian.
+
 ## 1.3.3
 
 - Fixed an empty Person Network view in Bases when Obsidian loads the component before assigning its view configuration.
