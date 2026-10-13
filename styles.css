@@ -413,10 +413,10 @@
 .person-network-author-card {
 	display: flex;
 	align-items: center;
-	gap: 18px;
-	margin-top: 32px;
-	padding: 16px;
-	border-radius: 12px;
+	gap: 14px;
+	margin-top: 24px;
+	padding: 12px 14px;
+	border-radius: var(--radius-l, 12px);
 	background: var(--background-secondary);
 }
 
@@ -429,24 +429,42 @@
 }
 
 .person-network-author-avatar {
-	width: 50px;
-	height: 50px;
-	flex: 0 0 50px;
+	width: 44px;
+	height: 44px;
+	flex: 0 0 44px;
 	border-radius: 50%;
 	object-fit: cover;
 }
 
 .person-network-author-copy { min-width: 0; }
-.person-network-author-copy h3 { margin: 0 0 3px; padding: 0; font-size: var(--font-ui-medium); }
-.person-network-author-copy p { margin: 0; color: var(--text-muted); line-height: 1.45; }
+.person-network-author-copy > .setting-item {
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.person-network-author-copy > .setting-item::before { content: none; }
+.person-network-author-copy .setting-item-info { margin: 0; }
+.person-network-author-copy .setting-item-name {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	line-height: 1.3;
+}
+.person-network-author-copy p {
+	margin: 2px 0 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+}
 .person-network-social-links { display: flex; flex: 0 0 auto; gap: 8px; }
 
 .person-network-author-card a.person-network-social-button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 42px;
-	height: 42px;
+	width: 34px;
+	height: 34px;
 	border-radius: 10px;
 	color: #fff;
 	text-decoration: none;
@@ -458,7 +476,7 @@
 .person-network-social-button.is-telegram { background: #229ed9; }
 .person-network-social-button.is-boosty { background: #f15f2c; }
 .person-network-social-button.is-youtube { background: #f00; }
-.person-network-social-button svg { width: 23px; height: 23px; fill: currentColor; }
+.person-network-social-button svg { width: 19px; height: 19px; fill: currentColor; }
 
 .person-network-layer-panel {
 	position: absolute;
@@ -522,7 +540,7 @@
 .person-network-layer-settings.is-expanded .person-network-layer-settings-body { display: block; }
 
 @media (max-width: 700px) {
-	.person-network-author-card { align-items: flex-start; flex-direction: column; }
-	.person-network-social-links { margin-left: 64px; }
+	.person-network-author-card { align-items: center; flex-direction: row; flex-wrap: wrap; }
+	.person-network-social-links { margin-left: 58px; }
 	.person-network-layer-panel { max-width: calc(100% - 24px); }
 }

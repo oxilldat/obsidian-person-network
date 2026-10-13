@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.5
+
+- Restored the compact author card layout in settings to match Oxill Calendar while retaining Obsidian's standard settings heading API.
+
 ## 1.3.4
 
 - Fixed stale graph labels after notes are created or modified, including bulk changes made outside Obsidian.
