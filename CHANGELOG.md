@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.6
+
+- Unified Euler-circle group definitions across the standalone graph and all Bases views.
+- Kept each Bases view's filters and view options independent.
+- Migrated legacy per-view groups into one shared list without dropping unique groups.
+- Made group settings available in both orbital and spatial layout modes.
+
 ## 1.3.5
 
 - Restored the compact author card layout in settings to match Oxill Calendar while retaining Obsidian's standard settings heading API.
