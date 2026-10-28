@@ -12,7 +12,7 @@ Person Network turns notes about people into an interactive relationship map in 
 - Photos, names, companies, roles, connections, and potential contacts.
 - A personal note selected in the plugin settings, with no special frontmatter flag required.
 - Filters for any frontmatter property with all/any matching.
-- Independent group sets for the standalone graph and every Bases view.
+- One shared group set across the standalone graph and every Bases view.
 - Smooth focus for a person's connections or members of the same company on hover.
 - Non-destructive photo framing that leaves the original image unchanged.
 - Automatic persistence of filters, zoom, camera position, and display options.
@@ -101,7 +101,7 @@ layers:
   - project-alpha
 ```
 
-The groups button opens a compact graph panel. The eye button hides the circle, while the person button hides all group members. Group definitions are independent for the standalone graph and each Bases view; membership always comes from the shared frontmatter property.
+The groups button opens a compact graph panel. The eye button hides the circle, while the person button hides all group members. Group definitions and visibility are shared by the standalone graph and every Bases view; membership always comes from the shared frontmatter property.
 
 ## Filters and display
 
@@ -130,7 +130,7 @@ The editor is also available for the personal note at the center of the orbital 
 
 ## Bases
 
-With the Bases core plugin enabled, select **Person Network** as a Bases view. Bases filters determine which notes appear, while view options map the name, photo, relation, and contacts properties. Every Bases view has its own group definitions and saved graph state.
+With the Bases core plugin enabled, select **Person Network** as a Bases view. Bases filters determine which notes appear, while view options map the name, photo, relation, and contacts properties. Every Bases view keeps its own filters and view options, while all graph views use the same group definitions.
 
 Bases integration can be disabled in the Person Network settings. Reload the plugin or Obsidian after changing this option.
 

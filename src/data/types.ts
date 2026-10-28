@@ -52,12 +52,6 @@ export interface GraphLayer {
 	showMembers: boolean;
 }
 
-export interface GraphLayerScope {
-	id: string;
-	label: string;
-	layers: GraphLayer[];
-}
-
 export interface PluginSettings {
 	// Structural / person-detection
 	/** Tag (without '#') identifying a person note. */
@@ -86,7 +80,8 @@ export interface PluginSettings {
 	graphState?: PersistedGraphState;
 	photoCrops?: Record<string, PhotoCropSettings>;
 	layerField: string;
-	layerScopes?: Record<string, GraphLayerScope>;
+	/** Shared Euler-circle definitions used by every graph view. */
+	layers: GraphLayer[];
 }
 
 export interface PersistedGraphState {

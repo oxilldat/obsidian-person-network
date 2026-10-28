@@ -1,7 +1,7 @@
 import { Plugin, type WorkspaceLeaf } from "obsidian";
 import { BASES_VIEW_TYPE, PersonNetworkBasesView } from "./bases/graph-bases-view";
 import { buildBasesOptions } from "./bases/options";
-import type { GraphLayerScope, PluginSettings } from "./data/types";
+import type { PluginSettings } from "./data/types";
 import { setLocale, t } from "./i18n";
 import { DEFAULT_SETTINGS } from "./settings/defaults";
 import { normalizeSettings, renameSettingsPaths } from "./settings/normalize";
@@ -60,9 +60,6 @@ export default class PersonNetworkPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		this.settings = normalizeSettings(await this.loadData());
-		for (const scope of Object.values(this.settings.layerScopes ?? {})) {
-			for (const layer of scope.layers) this.migrateLayer(layer);
-		}
 	}
 
 	async saveSettings(): Promise<void> {
@@ -73,40 +70,6 @@ export default class PersonNetworkPlugin extends Plugin {
 
 	async saveGraphState(): Promise<void> {
 		await this.saveData(this.settings);
-	}
-
-	getLayerScope(id: string, label: string): GraphLayerScope {
-		this.settings.layerScopes ??= {};
-		const existing = this.settings.layerScopes[id];
-		if (existing) {
-			if (existing.label !== label) existing.label = label;
-			for (const layer of existing.layers) {
-				this.migrateLayer(layer);
-				layer.showArea ??= true;
-				layer.showMembers ??= true;
-			}
-			return existing;
-		}
-		const scope: GraphLayerScope = { id, label, layers: [] };
-		this.settings.layerScopes[id] = scope;
-		void this.saveGraphState();
-		return scope;
-	}
-
-	private migrateLayer(layer: GraphLayerScope["layers"][number]): void {
-		const legacy = layer as GraphLayerScope["layers"][number] & {
-			frontmatterField?: string;
-			icon?: string;
-			showLabel?: boolean;
-			showIcon?: boolean;
-		};
-		layer.identifier ||= legacy.frontmatterField || layer.name.trim().toLowerCase().replace(/\s+/g, "-") || layer.id;
-		delete legacy.frontmatterField;
-		layer.showArea ??= true;
-		layer.showMembers ??= true;
-		delete legacy.icon;
-		delete legacy.showLabel;
-		delete legacy.showIcon;
 	}
 
 	registerSettingsListener(listener: () => void): () => void {

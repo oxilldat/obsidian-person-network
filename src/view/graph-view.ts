@@ -56,10 +56,10 @@ export class PersonNetworkView extends ItemView {
 		this.addChild(this.dataStore);
 
 		this.renderer = new CanvasRenderer(container, this.app, () => this.plugin.settings);
-		const layerScope = this.plugin.getLayerScope("standalone", t("view.displayName"));
-		this.renderer.setLayers(layerScope.layers);
-		this.layerPanel = new LayerPanel(container, layerScope.layers, () => {
-			this.renderer?.setLayers(layerScope.layers);
+		const layers = this.plugin.settings.layers;
+		this.renderer.setLayers(layers);
+		this.layerPanel = new LayerPanel(container, layers, () => {
+			this.renderer?.setLayers(layers);
 			void this.plugin.saveGraphState();
 		}, (open) => { if (open) this.filterPanel?.close(); });
 		this.layerPanel.setVisible(this.plugin.settings.layoutModel === "spatial");
@@ -107,10 +107,10 @@ export class PersonNetworkView extends ItemView {
 					: this.peopleById.get(id);
 				if (person) showNodeContextMenu(this.app, this.plugin.settings, person, event, async () => {
 					await this.plugin.saveSettings();
-					this.renderer?.setLayers(layerScope.layers);
-					this.layerPanel?.update(layerScope.layers);
+					this.renderer?.setLayers(layers);
+					this.layerPanel?.update(layers);
 					this.dataStore?.reindex();
-				}, layerScope.layers);
+				}, layers);
 			},
 			onViewChanged: () => this.persistState(),
 			getTooltipLines: (id) => {
@@ -120,7 +120,7 @@ export class PersonNetworkView extends ItemView {
 				if (person) {
 					const frontmatter = this.app.metadataCache.getFileCache(person.file)?.frontmatter;
 					const identifiers = new Set(readLayerIdentifiers(frontmatter?.[this.plugin.settings.layerField]));
-					return personTooltipLines(person, layerScope.layers.filter((layer) => identifiers.has(layer.identifier)));
+					return personTooltipLines(person, layers.filter((layer) => identifiers.has(layer.identifier)));
 				}
 				const ghost = this.ghostsById.get(id);
 				if (ghost) return ghostTooltipLines(ghost);
@@ -150,9 +150,9 @@ export class PersonNetworkView extends ItemView {
 
 	/** Called by the plugin after settings change, so role edits etc. show up without reopening the view. */
 	onSettingsChanged(): void {
-		const layerScope = this.plugin.getLayerScope("standalone", t("view.displayName"));
-		this.renderer?.setLayers(layerScope.layers);
-		this.layerPanel?.update(layerScope.layers);
+		const layers = this.plugin.settings.layers;
+		this.renderer?.setLayers(layers);
+		this.layerPanel?.update(layers);
 		this.layerPanel?.setVisible(this.plugin.settings.layoutModel === "spatial");
 		this.dataStore?.reindex();
 		this.renderer?.requestRedraw();
@@ -162,8 +162,8 @@ export class PersonNetworkView extends ItemView {
 		this.peopleById = new Map(snapshot.people.map((person) => [person.id, person]));
 		this.ghostsById = new Map(snapshot.ghosts.map((ghost) => [ghost.id, ghost]));
 
-		const layerScope = this.plugin.getLayerScope("standalone", t("view.displayName"));
-		this.renderer?.setLayers(layerScope.layers, resolveLayerMembers(this.app, snapshot.people, layerScope.layers, this.plugin.settings.layerField));
+		const layers = this.plugin.settings.layers;
+		this.renderer?.setLayers(layers, resolveLayerMembers(this.app, snapshot.people, layers, this.plugin.settings.layerField));
 		this.renderer?.setGraph(snapshot);
 
 		const propertyNames = new Set<string>();

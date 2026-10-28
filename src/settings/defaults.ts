@@ -31,7 +31,5 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	},
 	photoCrops: {},
 	layerField: "layers",
-	layerScopes: {
-		standalone: { id: "standalone", label: "Person Network", layers: [] },
-	},
+	layers: [],
 };

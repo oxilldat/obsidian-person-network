@@ -51,6 +51,55 @@ function propertyFilters(value: unknown): PropertyFilterRule[] {
 	return result;
 }
 
+function graphLayers(value: unknown): GraphLayer[] {
+	if (!Array.isArray(value)) return [];
+	const seenIds = new Set<string>();
+	const seenIdentifiers = new Set<string>();
+	const layers: GraphLayer[] = [];
+	for (const item of value) {
+		const layer = record(item);
+		if (typeof layer.id !== "string" || !layer.id || seenIds.has(layer.id)) continue;
+		const name = typeof layer.name === "string" ? layer.name : layer.id;
+		const identifier = typeof layer.identifier === "string" && layer.identifier.trim()
+			? layer.identifier.trim() : typeof layer.frontmatterField === "string" && layer.frontmatterField.trim()
+				? layer.frontmatterField.trim() : name.trim().toLowerCase().replace(/\s+/g, "-") || layer.id;
+		if (seenIdentifiers.has(identifier)) continue;
+		seenIds.add(layer.id);
+		seenIdentifiers.add(identifier);
+		layers.push({
+			id: layer.id, name, identifier, color: color(layer.color, "#7b6cd9"),
+			priority: number(layer.priority, layers.length, -Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER),
+			showArea: typeof layer.showArea === "boolean" ? layer.showArea : true,
+			showMembers: typeof layer.showMembers === "boolean" ? layer.showMembers : true,
+		});
+	}
+	return layers;
+}
+
+/**
+ * Version 1.3.5 stored separate layer arrays per graph. Prefer the standalone
+ * definitions, then append unique circles from Bases views so migration never
+ * silently drops a circle that existed only in one saved view.
+ */
+function sharedGraphLayers(source: Record<string, unknown>): GraphLayer[] {
+	if (Array.isArray(source.layers)) return graphLayers(source.layers);
+	const scopes = record(source.layerScopes);
+	const orderedScopes = [scopes.standalone, ...Object.entries(scopes)
+		.filter(([id]) => id !== "standalone").map(([, scope]) => scope)];
+	const merged: GraphLayer[] = [];
+	const seenIds = new Set<string>();
+	const seenIdentifiers = new Set<string>();
+	for (const rawScope of orderedScopes) {
+		for (const layer of graphLayers(record(rawScope).layers)) {
+			if (seenIds.has(layer.id) || seenIdentifiers.has(layer.identifier)) continue;
+			seenIds.add(layer.id);
+			seenIdentifiers.add(layer.identifier);
+			merged.push(layer);
+		}
+	}
+	return merged;
+}
+
 /** Restore known fields independently: older partial nested settings must not erase new defaults. */
 export function normalizeSettings(value: unknown): PluginSettings {
 	const source = record(value);
@@ -98,31 +147,7 @@ export function normalizeSettings(value: unknown): PluginSettings {
 			zoom: number(crop.zoom, 1, 1, 4),
 		};
 	}
-	for (const [id, raw] of Object.entries(record(source.layerScopes))) {
-		const scope = record(raw);
-		if (!Array.isArray(scope.layers)) continue;
-		const seen = new Set<string>();
-		const layers: GraphLayer[] = [];
-		for (const item of scope.layers) {
-			const layer = record(item);
-			if (typeof layer.id !== "string" || !layer.id || seen.has(layer.id)) continue;
-			seen.add(layer.id);
-			const name = typeof layer.name === "string" ? layer.name : layer.id;
-			const identifier = typeof layer.identifier === "string" && layer.identifier.trim()
-				? layer.identifier.trim() : typeof layer.frontmatterField === "string" && layer.frontmatterField.trim()
-					? layer.frontmatterField.trim() : name.trim().toLowerCase().replace(/\s+/g, "-") || layer.id;
-			layers.push({
-				id: layer.id, name, identifier, color: color(layer.color, "#7b6cd9"),
-				priority: number(layer.priority, layers.length, -Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER),
-				showArea: typeof layer.showArea === "boolean" ? layer.showArea : true,
-				showMembers: typeof layer.showMembers === "boolean" ? layer.showMembers : true,
-			});
-		}
-		Object.defineProperty(result.layerScopes, id, {
-			value: { id, label: typeof scope.label === "string" ? scope.label : id, layers },
-			writable: true, enumerable: true, configurable: true,
-		});
-	}
+	result.layers = sharedGraphLayers(source);
 	return result;
 }
 

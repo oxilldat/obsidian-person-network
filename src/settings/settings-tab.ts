@@ -42,7 +42,6 @@ class ConfirmResetRolesModal extends Modal {
 
 export class PersonNetworkSettingTab extends PluginSettingTab {
 	private readonly plugin: PersonNetworkPlugin;
-	private selectedLayerScopeId: string | null = null;
 	private readonly expandedLayers = new Set<string>();
 
 	constructor(app: App, plugin: PersonNetworkPlugin) {
@@ -57,7 +56,7 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 		const generalGroup = this.renderGeneralSection(containerEl);
 		this.renderNewNoteSection(generalGroup);
 		this.renderRolesSection(containerEl);
-		if (this.plugin.settings.layoutModel === "spatial") this.renderLayersSection(containerEl);
+		this.renderLayersSection(containerEl);
 		this.renderPersonDetectionSection(containerEl);
 		this.renderAuthorCard(containerEl);
 	}
@@ -382,18 +381,8 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 
 	private renderLayersSection(containerEl: HTMLElement): void {
 		new Setting(containerEl).setName(t("settings.layersHeading")).setHeading();
-		const scopes = Object.values(this.plugin.settings.layerScopes ?? {});
-		if (scopes.length === 0) return;
-		this.selectedLayerScopeId = scopes.some((scope) => scope.id === this.selectedLayerScopeId)
-			? this.selectedLayerScopeId : scopes[0].id;
-		const scope = scopes.find((candidate) => candidate.id === this.selectedLayerScopeId) ?? scopes[0];
+		const layers = this.plugin.settings.layers;
 		const commonGroup = containerEl.createDiv({ cls: "person-network-settings-group person-network-layer-add" });
-		if (scopes.length > 1) {
-			new Setting(commonGroup).setName(t("settings.layer.scope")).setDesc(t("settings.layer.scopeDesc")).addDropdown((dropdown) => {
-				for (const candidate of scopes) dropdown.addOption(candidate.id, candidate.label);
-				dropdown.setValue(scope.id).onChange((value) => { this.selectedLayerScopeId = value; this.redisplayPreservingScroll(); });
-			});
-		}
 
 		let newName = "";
 		let newIdentifier = "";
@@ -401,21 +390,21 @@ export class PersonNetworkSettingTab extends PluginSettingTab {
 			.addText((text) => text.setPlaceholder(t("settings.layer.namePlaceholder")).onChange((value) => { newName = value.trim(); }))
 			.addText((text) => text.setPlaceholder(t("settings.layer.identifierPlaceholder")).onChange((value) => { newIdentifier = value.trim(); }))
 			.addButton((button) => button.setButtonText(t("settings.layer.add")).setCta().onClick(async () => {
-				if (!newName || !newIdentifier || scope.layers.some((layer) => layer.identifier === newIdentifier)) return;
+				if (!newName || !newIdentifier || layers.some((layer) => layer.identifier === newIdentifier)) return;
 				const layer: GraphLayer = {
 					id: `layer:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`,
 					name: newName, identifier: newIdentifier, color: "#7b6cd9",
-					priority: scope.layers.length, showArea: true, showMembers: true,
+					priority: layers.length, showArea: true, showMembers: true,
 				};
-				scope.layers.push(layer);
+				layers.push(layer);
 				this.expandedLayers.add(layer.id);
 				await this.save();
 				this.redisplayPreservingScroll();
 			}));
 
-		for (const layer of [...scope.layers].sort((a, b) => b.priority - a.priority)) {
+		for (const layer of [...layers].sort((a, b) => b.priority - a.priority)) {
 			const layerGroup = containerEl.createDiv({ cls: "person-network-settings-group person-network-layer-settings" });
-			this.renderLayerEditor(layerGroup, scope.layers, layer);
+			this.renderLayerEditor(layerGroup, layers, layer);
 		}
 	}
 

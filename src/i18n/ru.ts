@@ -142,8 +142,6 @@ const ru: Record<keyof typeof en, string> = {
 	"settings.layersDesc": "Группы используются в пространственной модели и настраиваются отдельно для обычного графа и представлений Bases.",
 	"settings.layerField.name": "Поле групп",
 	"settings.layerField.desc": "Общее поле frontmatter со списком идентификаторов групп, например: layers: [family, work].",
-	"settings.layer.scope": "Отображение",
-	"settings.layer.scopeDesc": "Выберите представление для настройки групп.",
 	"settings.layer.add": "Добавить группу",
 	"settings.layer.defaultName": "Новая группа",
 	"settings.layer.name": "Название и цвет группы",

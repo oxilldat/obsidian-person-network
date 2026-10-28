@@ -139,8 +139,6 @@ const en = {
 	"settings.layersDesc": "Groups are used by the spatial model and configured independently for the standalone graph and each Bases view.",
 	"settings.layerField.name": "Groups field",
 	"settings.layerField.desc": "Shared frontmatter field containing identifiers, for example: layers: [family, work].",
-	"settings.layer.scope": "View",
-	"settings.layer.scopeDesc": "Choose the view whose groups you want to configure.",
 	"settings.layer.add": "Add group",
 	"settings.layer.defaultName": "New group",
 	"settings.layer.name": "Group name and color",

@@ -17,11 +17,28 @@ describe("saved settings compatibility", () => {
 		expect(settings.graphState?.nodeScale).toBe(1);
 		expect(settings.graphState?.linkDistance).toBe(40);
 		expect(settings.graphState?.camera).toBeUndefined();
-		expect(Object.keys(settings.layerScopes!)).toEqual(["standalone"]);
+		expect(settings.layers).toEqual([]);
 	});
 	it("migrates legacy groups and drops obsolete rendering fields", () => {
 		const settings = normalizeSettings({ layerScopes: { test: { layers: [null, { id: "group", name: "Friends", frontmatterField: "friends", showMembers: false, icon: "users", showLabel: true }] } } });
-		expect(settings.layerScopes?.test.layers).toEqual([{ id: "group", name: "Friends", identifier: "friends", color: "#7b6cd9", priority: 0, showArea: true, showMembers: false }]);
+		expect(settings.layers).toEqual([{ id: "group", name: "Friends", identifier: "friends", color: "#7b6cd9", priority: 0, showArea: true, showMembers: false }]);
+	});
+
+	it("merges legacy per-view circles into one shared list", () => {
+		const settings = normalizeSettings({ layerScopes: {
+			base: { layers: [
+				{ id: "base-friends", name: "Base friends", identifier: "friends", color: "#ff0000" },
+				{ id: "work", name: "Work", identifier: "work" },
+			] },
+			standalone: { layers: [
+				{ id: "friends", name: "Friends", identifier: "friends", color: "#00ff00" },
+			] },
+		} });
+
+		expect(settings.layers.map((layer) => [layer.name, layer.identifier, layer.color])).toEqual([
+			["Friends", "friends", "#00ff00"],
+			["Work", "work", "#7b6cd9"],
+		]);
 	});
 	it("retains personal note, template and photo crops after a folder rename", () => {
 		const settings = normalizeSettings({ selfNotePath: "People/Me.md", newNoteTemplatePath: "People/Template.md", newNoteFolder: "People", photoCrops: { "People/Me.md": { centerX: 0.4, centerY: 0.6, zoom: 2 }, "People2/Other.md": { zoom: 1 } } });
