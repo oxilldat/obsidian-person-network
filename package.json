@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-person-network",
-	"version": "1.3.6",
+	"version": "1.3.7",
 	"description": "Visualize the people in your vault as an interactive relationship map",
 	"main": "main.js",
 	"scripts": {
@@ -10,7 +10,7 @@
 		"test:watch": "vitest"
 	},
 	"keywords": ["obsidian", "people", "relationships", "graph", "network"],
-	"author": "oxilldat",
+	"author": "oxill",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/oxilldat/obsidian-person-network.git"

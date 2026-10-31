@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.7
+
+- Changed the displayed plugin author name from `oxilldat` to `oxill`.
+
 ## 1.3.6
 
 - Unified Euler-circle group definitions across the standalone graph and all Bases views.
